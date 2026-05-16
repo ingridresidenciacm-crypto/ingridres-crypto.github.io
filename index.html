@@ -334,6 +334,7 @@ function App() {
   const [page, setPage] = useState('dashboard');
   const [theme, setTheme] = useState(() => storage.get('lumen_theme', 'light'));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [appSidebarOpen, setAppSidebarOpen] = useState(() => storage.get('lumen_sidebar_open', true));
 
   const [questoes, setQuestoes] = useState(() => storage.get('lumen_questoes', [QUESTAO_EXEMPLO]));
   const [flashcards, setFlashcards] = useState(() => storage.get('lumen_flashcards', []));
@@ -388,6 +389,8 @@ function App() {
   useEffect(() => { storage.set('lumen_fluxogramas', fluxogramas); }, [fluxogramas]);
   useEffect(() => { storage.set('lumen_cronograma', cronograma); }, [cronograma]);
   useEffect(() => { storage.set('lumen_instituicoes', instituicoes); }, [instituicoes]);
+  useEffect(() => { storage.set('lumen_sidebar_open', appSidebarOpen); }, [appSidebarOpen]);
+
   useEffect(() => {
     storage.set('lumen_theme', theme);
     document.body.style.background = theme === 'dark' ? '#1a1814' : '#f4ede0';
@@ -429,7 +432,15 @@ function App() {
         page={page} setPage={setPage} C={C}
         theme={theme} setTheme={setTheme}
         mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen}
+        appSidebarOpen={appSidebarOpen} setAppSidebarOpen={setAppSidebarOpen}
       />
+      {!appSidebarOpen && (
+        <button className="lumen-sidebar-float" onClick={() => setAppSidebarOpen(true)} title="Mostrar menu lateral" style={{
+          position: 'fixed', left: 12, top: 76, zIndex: 60, width: 38, height: 38, borderRadius: 10,
+          background: C.cardElev, border: `1px solid ${C.borderSoft}`, color: C.accent, boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}><I.Menu size={18} /></button>
+      )}
       <main className="lumen-main" style={{
         flex: 1, minHeight: '100vh', minHeight: '100dvh', minWidth: 0,
         display: 'flex', flexDirection: 'column'
@@ -454,13 +465,15 @@ function App() {
       </main>
       <style>{`
         @media (min-width: 900px) {
-          .lumen-sidebar { transform: translateX(0) !important; }
-          .lumen-main { margin-left: 240px; }
+          .lumen-sidebar { transform: ${appSidebarOpen ? 'translateX(0)' : 'translateX(-100%)'} !important; }
+          .lumen-main { margin-left: ${appSidebarOpen ? '240px' : '0'}; transition: margin-left 0.25s ease; }
           .lumen-mobile-menu { display: none !important; }
+          .lumen-desktop-only { display: flex !important; }
           .lumen-overlay { display: none !important; }
         }
         @media (max-width: 899px) {
           .lumen-mobile-menu { display: inline-flex !important; }
+          .lumen-desktop-only, .lumen-sidebar-float { display: none !important; }
           .lumen-grid-resp { grid-template-columns: 1fr !important; }
           .lumen-search-text { display: none !important; }
         }
@@ -470,7 +483,7 @@ function App() {
 }
 
 // ============= SIDEBAR =============
-function Sidebar({ page, setPage, C, mobileMenuOpen, setMobileMenuOpen }) {
+function Sidebar({ page, setPage, C, mobileMenuOpen, setMobileMenuOpen, appSidebarOpen, setAppSidebarOpen }) {
   const navigate = (id) => { setPage(id); setMobileMenuOpen(false); };
   return (
     <>
@@ -486,14 +499,14 @@ function Sidebar({ page, setPage, C, mobileMenuOpen, setMobileMenuOpen }) {
         transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)',
         transition: 'transform 0.25s ease',
       }}>
-        <div style={{ padding: '24px 20px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '24px 14px 18px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
             width: 36, height: 36, borderRadius: 8, background: C.accent,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontWeight: 700, fontFamily: 'Fraunces, serif', fontSize: 20,
             boxShadow: `0 2px 8px ${C.accent}40`,
           }}>L</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div className="lumen-serif" style={{
               fontSize: 22, fontWeight: 600, color: C.text, lineHeight: 1, letterSpacing: '-0.02em'
             }}>Lúmen</div>
@@ -501,6 +514,7 @@ function Sidebar({ page, setPage, C, mobileMenuOpen, setMobileMenuOpen }) {
               Clínica Médica
             </div>
           </div>
+          <button className="lumen-desktop-only" onClick={() => setAppSidebarOpen(false)} title="Ocultar menu lateral" style={{ padding: 7, borderRadius: 7, color: C.textSoft, border: `1px solid ${C.borderSoft}`, background: C.bg, display: 'flex' }}><I.ChevL size={15}/></button>
         </div>
         <nav style={{ flex: 1, padding: '8px 12px', overflowY: 'auto' }} className="lumen-scroll">
           {NAV.map(item => {
@@ -2448,6 +2462,7 @@ function CalculadorasEscores({ calculadoras, setCalculadoras, C }) {
   const [filtroTema, setFiltroTema] = useState('todos');
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroSubtema, setFiltroSubtema] = useState('todos');
+  const [itemAberto, setItemAberto] = useState(null);
   const subtemas = useMemo(() => [...new Set((calculadoras || []).map(c => c.subtema).filter(Boolean))].sort(), [calculadoras]);
   const tipoDaAba = aba === 'escores' ? 'Escore' : aba === 'calculadoras' ? 'Calculadora' : null;
   const filtradas = useMemo(() => (calculadoras || []).filter(c => {
@@ -2465,6 +2480,9 @@ function CalculadorasEscores({ calculadoras, setCalculadoras, C }) {
     setShowForm(false); setEditing(null); setForm(itemVazio());
   };
   const excluir = (id) => { if (confirm('Deseja realmente excluir esta calculadora/escore?')) setCalculadoras((calculadoras || []).filter(c => c.id !== id)); };
+  const aberto = itemAberto ? (calculadoras || []).find(c => c.id === itemAberto) : null;
+  if (aberto) return <CalcScoreDetail item={aberto} C={C} onBack={() => setItemAberto(null)} onEdit={() => { setForm({ ...itemVazio(), ...aberto, tabelaEscore: aberto.tabelaEscore || {columns:['Pergunta','Resposta','Pontuação'], rows:[]}, tabelaInterpretacao: aberto.tabelaInterpretacao || {columns:['Classificação','Valor / intervalo'], rows:[]} }); setEditing(aberto.id); setShowForm(true); setItemAberto(null); }} />;
+
   const Aba = ({id, children}) => <button onClick={()=>setAba(id)} style={{ padding:'10px 14px', borderRadius:999, fontSize:13, fontWeight:800, background: aba===id ? C.accent : C.card, color: aba===id ? '#fff' : C.textMuted, border:`1px solid ${aba===id ? C.accent : C.borderSoft}` }}>{children}</button>;
 
   return <div className="lumen-fade-in">
@@ -2500,8 +2518,43 @@ function CalculadorasEscores({ calculadoras, setCalculadoras, C }) {
         <FormLabel C={C} style={{ marginTop: 12 }}>Observações / dica de prova</FormLabel><RichTextEditor C={C} value={form.observacoes} onChange={v=>setForm({...form, observacoes:v})} minHeight={70} />
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div>
       </Card>}
-      {filtradas.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Target size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum item cadastrado nesta aba.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: 14 }}>{filtradas.map(c => { const tema = ESPECIALIDADES.find(t => t.id === c.especialidade); const table = c.tabelaEscore || {columns:['Pergunta','Resposta','Pontuação'], rows:[]}; const interpTable = c.tabelaInterpretacao || {columns:['Classificação','Valor / intervalo'], rows:[]}; return <Card key={c.id} C={C} hover><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<Badge C={C} color="soft">{c.tipo}</Badge>{c.subtema && <Badge C={C} color="soft">{c.subtema}</Badge>}</div><h4 className="lumen-serif" style={{ fontSize: 18, margin: '4px 0 8px', fontWeight: 500, color: C.text }}>{c.nome}</h4>{c.formula && <><div style={{ fontSize: 11, color: C.textSoft, fontWeight: 700 }}>Como calcular</div><HtmlText html={c.formula} C={C} style={{ fontSize: 13, color: C.textMuted }} /></>}<ExecutableCalculator item={c} C={C}/>{table.rows?.length ? <div style={{ marginTop: 10, overflowX:'auto' }}><table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}><thead><tr>{table.columns.map(col=><th key={col} style={{ textAlign:'left', padding:6, borderBottom:`1px solid ${C.borderSoft}` }}>{col}</th>)}</tr></thead><tbody>{table.rows.map((r,i)=><tr key={i}>{table.columns.map((_,ci)=><td key={ci} style={{ padding:6, borderBottom:`1px solid ${C.borderSoft}` }}>{r?.[ci]}</td>)}</tr>)}</tbody></table></div> : null}{interpTable.rows?.length ? <div style={{ marginTop: 10, overflowX:'auto' }}><table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}><tbody>{interpTable.rows.map((r,i)=><tr key={i}><td style={{ padding:7, borderBottom:`1px solid ${C.borderSoft}`, fontWeight:700 }}>{r?.[0]}</td><td style={{ padding:7, borderBottom:`1px solid ${C.borderSoft}` }}>{r?.[1]}</td></tr>)}</tbody></table></div> : null}{c.interpretacao && <div style={{ padding: 10, borderRadius: 8, background: C.bg, border: `1px solid ${C.borderSoft}`, fontSize: 13, marginTop:8 }}><HtmlText html={c.interpretacao} C={C} /></div>}{c.observacoes && <div style={{ marginTop: 8, fontSize: 12.5, color: C.accent }}><strong>Dica:</strong> <HtmlText html={c.observacoes} C={C} style={{display:'inline'}} /></div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={() => { setForm({ ...itemVazio(), ...c, tabelaEscore: c.tabelaEscore || {columns:['Pergunta','Resposta','Pontuação'], rows:[]}, tabelaInterpretacao: c.tabelaInterpretacao || {columns:['Classificação','Valor / intervalo'], rows:[]} }); setEditing(c.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar"><I.Edit size={13} /></button><button onClick={() => excluir(c.id)} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir"><I.Trash size={13} /></button></div></Card>; })}</div>}
+      {filtradas.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Target size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum item cadastrado nesta aba.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: 14 }}>{filtradas.map(c => { const tema = ESPECIALIDADES.find(t => t.id === c.especialidade); const table = c.tabelaEscore || {columns:['Pergunta','Resposta','Pontuação'], rows:[]}; const interpTable = c.tabelaInterpretacao || {columns:['Classificação','Valor / intervalo'], rows:[]}; return <Card key={c.id} C={C} hover onClick={() => setItemAberto(c.id)} style={{ cursor:'pointer' }}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<Badge C={C} color="soft">{c.tipo}</Badge>{c.subtema && <Badge C={C} color="soft">{c.subtema}</Badge>}</div><h4 className="lumen-serif" style={{ fontSize: 18, margin: '4px 0 8px', fontWeight: 500, color: C.text }}>{c.nome}</h4>{c.formula && <><div style={{ fontSize: 11, color: C.textSoft, fontWeight: 700 }}>Como calcular</div><HtmlText html={c.formula} C={C} style={{ fontSize: 13, color: C.textMuted }} /></>}<ExecutableCalculator item={c} C={C}/>{table.rows?.length ? <div style={{ marginTop: 10, overflowX:'auto' }}><table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}><thead><tr>{table.columns.map(col=><th key={col} style={{ textAlign:'left', padding:6, borderBottom:`1px solid ${C.borderSoft}` }}>{col}</th>)}</tr></thead><tbody>{table.rows.map((r,i)=><tr key={i}>{table.columns.map((_,ci)=><td key={ci} style={{ padding:6, borderBottom:`1px solid ${C.borderSoft}` }}>{r?.[ci]}</td>)}</tr>)}</tbody></table></div> : null}{interpTable.rows?.length ? <div style={{ marginTop: 10, overflowX:'auto' }}><table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}><tbody>{interpTable.rows.map((r,i)=><tr key={i}><td style={{ padding:7, borderBottom:`1px solid ${C.borderSoft}`, fontWeight:700 }}>{r?.[0]}</td><td style={{ padding:7, borderBottom:`1px solid ${C.borderSoft}` }}>{r?.[1]}</td></tr>)}</tbody></table></div> : null}{c.interpretacao && <div style={{ padding: 10, borderRadius: 8, background: C.bg, border: `1px solid ${C.borderSoft}`, fontSize: 13, marginTop:8 }}><HtmlText html={c.interpretacao} C={C} /></div>}{c.observacoes && <div style={{ marginTop: 8, fontSize: 12.5, color: C.accent }}><strong>Dica:</strong> <HtmlText html={c.observacoes} C={C} style={{display:'inline'}} /></div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={(e) => { e.stopPropagation(); setForm({ ...itemVazio(), ...c, tabelaEscore: c.tabelaEscore || {columns:['Pergunta','Resposta','Pontuação'], rows:[]}, tabelaInterpretacao: c.tabelaInterpretacao || {columns:['Classificação','Valor / intervalo'], rows:[]} }); setEditing(c.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar"><I.Edit size={13} /></button><button onClick={(e) => { e.stopPropagation(); excluir(c.id); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir"><I.Trash size={13} /></button></div></Card>; })}</div>}
     </>}
+  </div>;
+}
+
+
+function ScoreRowsView({ table, C }) {
+  const rows = table?.rows || [];
+  if (!rows.length) return null;
+  return <div style={{ overflowX:'auto', border:`1px solid ${C.borderSoft}`, borderRadius:10, marginTop:12 }}>
+    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
+      <tbody>{rows.map((r,i)=><React.Fragment key={i}>
+        {r?.[0] && <tr><td colSpan="2" style={{ padding:'12px 14px', background:C.bg, borderBottom:`1px solid ${C.borderSoft}`, fontWeight:800, color:C.text }}>{r[0]}</td></tr>}
+        <tr><td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.borderSoft}`, color:C.text }}>{r?.[1] || 'Resposta'}</td><td style={{ padding:'10px 14px', borderBottom:`1px solid ${C.borderSoft}`, color:C.accent, fontWeight:900, width:160, textAlign:'center' }}>{r?.[2] || '0'}</td></tr>
+      </React.Fragment>)}</tbody>
+    </table>
+  </div>;
+}
+
+function CalcScoreDetail({ item, C, onBack, onEdit }) {
+  const tema = ESPECIALIDADES.find(t => t.id === item.especialidade);
+  const interpTable = item.tabelaInterpretacao || {columns:['Classificação','Valor / intervalo'], rows:[]};
+  return <div className="lumen-fade-in" style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
+      <Button C={C} variant="ghost" icon={I.ArrowL} onClick={onBack}>Voltar</Button>
+      <Button C={C} variant="secondary" icon={I.Edit} onClick={onEdit}>Editar</Button>
+    </div>
+    <Card C={C} style={{ padding:'clamp(22px, 4vw, 36px)' }}>
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<Badge C={C} color="soft">{item.tipo}</Badge>{item.subtema && <Badge C={C} color="soft">{item.subtema}</Badge>}</div>
+      <h2 className="lumen-serif" style={{ fontSize:'clamp(26px, 4vw, 38px)', margin:'0 0 16px', color:C.text }}>{item.nome}</h2>
+      {item.formula && <section style={{ marginBottom:18 }}><h3 className="lumen-serif" style={{ fontSize:20, margin:'0 0 8px' }}>Como calcular</h3><HtmlText html={item.formula} C={C} style={{ fontSize:15, lineHeight:1.75 }} /></section>}
+      {item.tipo === 'Calculadora' && <ExecutableCalculator item={item} C={C} />}
+      {item.tipo === 'Escore' && <section style={{ marginTop:18 }}><h3 className="lumen-serif" style={{ fontSize:20, margin:'0 0 8px' }}>Pontuação</h3><ScoreRowsView table={item.tabelaEscore} C={C} /></section>}
+      {interpTable.rows?.length ? <section style={{ marginTop:18 }}><h3 className="lumen-serif" style={{ fontSize:20, margin:'0 0 8px' }}>Interpretação</h3><div style={{ overflowX:'auto', border:`1px solid ${C.borderSoft}`, borderRadius:10 }}><table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}><tbody>{interpTable.rows.map((r,i)=><tr key={i}><td style={{ padding:12, borderBottom:`1px solid ${C.borderSoft}`, fontWeight:800, color:C.text }}>{r?.[0]}</td><td style={{ padding:12, borderBottom:`1px solid ${C.borderSoft}`, color:C.textMuted }}>{r?.[1]}</td></tr>)}</tbody></table></div></section> : null}
+      {item.interpretacao && <section style={{ marginTop:18 }}><HtmlText html={item.interpretacao} C={C} /></section>}
+      {item.observacoes && <section style={{ marginTop:18, padding:14, borderRadius:10, background:C.accentSoft, color:C.accent }}><strong>Dica/observações:</strong><HtmlText html={item.observacoes} C={C} /></section>}
+    </Card>
   </div>;
 }
 
@@ -2509,7 +2562,7 @@ function CalculadorasEscores({ calculadoras, setCalculadoras, C }) {
 function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   const itemVazio = () => ({ id: 'atb-' + Date.now(), tipo: 'Agente etiológico', agente: '', classe: '', antibiotico: '', cobertura: '', resistencia: '', mecanismoAcao: '', observacoes: '' });
   const tabelaVazia = () => ({
-    columns: ['Microrganismo', 'Classe', 'Antibiótico', 'Cobertura', 'Observações'],
+    columns: ['Agente etiológico', 'Gram / tipo', 'Síndrome ou foco', 'Cobertura empírica sugerida', 'Resistências / não cobre', 'Observações'],
     rows: []
   });
   const [showForm, setShowForm] = useState(false);
@@ -2518,10 +2571,10 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [busca, setBusca] = useState('');
   const [showTabela, setShowTabela] = useState(false);
-  const [tabela, setTabela] = useState(() => storage.get('lumen_tabela_cobertura_antimicrobiana', tabelaVazia()));
+  const [tabela, setTabela] = useState(() => storage.get('lumen_tabela_agentes_etiologicos', tabelaVazia()));
   const [filtroTabela, setFiltroTabela] = useState('');
 
-  useEffect(() => { storage.set('lumen_tabela_cobertura_antimicrobiana', tabela); }, [tabela]);
+  useEffect(() => { storage.set('lumen_tabela_agentes_etiologicos', tabela); }, [tabela]);
 
   const filtrados = useMemo(() => (antimicrobianos || []).filter(a => {
     if (filtroTipo !== 'todos' && a.tipo !== filtroTipo) return false;
@@ -2567,14 +2620,14 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   return <div className="lumen-fade-in">
     <Card C={C} style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
       <div><h3 className="lumen-serif" style={{ fontSize: 20, margin: '0 0 4px' }}>Guia pessoal de antimicrobianos</h3><div style={{ fontSize: 13, color: C.textMuted }}>Organize por agente etiológico, classe/antibiótico, mecanismo de ação e cobertura de microrganismos.</div></div>
-      <Button C={C} icon={I.File} onClick={() => setShowTabela(!showTabela)}>{showTabela ? 'Fechar filtro/planilha' : 'Abrir filtro/planilha de cobertura'}</Button>
+      <Button C={C} icon={I.File} onClick={() => setShowTabela(!showTabela)}>{showTabela ? 'Fechar planilha' : 'Abrir planilha de agentes etiológicos'}</Button>
     </Card>
 
     {showTabela && <Card C={C} style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
-          <h3 className="lumen-serif" style={{ fontSize: 18, margin: 0 }}>Planilha interna de cobertura</h3>
-          <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>Tabela em branco/editável para você criar as colunas e linhas conforme necessidade. Os dados ficam salvos neste navegador.</div>
+          <h3 className="lumen-serif" style={{ fontSize: 18, margin: 0 }}>Planilha de agentes etiológicos</h3>
+          <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>Tabela editável com linhas e colunas para organizar agentes etiológicos, foco clínico, cobertura sugerida, resistências e observações. Os dados ficam salvos neste navegador.</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button C={C} size="sm" icon={I.Plus} onClick={adicionarLinha}>Adicionar linha</Button>
@@ -2582,7 +2635,7 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
           <Button C={C} size="sm" variant="danger" icon={I.Trash} onClick={limparTabela}>Limpar linhas</Button>
         </div>
       </div>
-      <input value={filtroTabela} onChange={e => setFiltroTabela(e.target.value)} placeholder="Filtrar na planilha por microrganismo, classe, antibiótico ou cobertura..." style={{ ...inputStyle(C), padding: '8px 12px', marginBottom: 12 }} />
+      <input value={filtroTabela} onChange={e => setFiltroTabela(e.target.value)} placeholder="Filtrar por agente etiológico, síndrome/foco, cobertura ou resistência..." style={{ ...inputStyle(C), padding: '8px 12px', marginBottom: 12 }} />
       <div className="lumen-scroll" style={{ overflowX: 'auto', border: `1px solid ${C.borderSoft}`, borderRadius: 10 }}>
         <table style={{ width: '100%', minWidth: 820, borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
@@ -2814,19 +2867,21 @@ function Fluxogramas({ fluxogramas, setFluxogramas, C }) {
 
 function ConversoresClinicos({ C }) {
   const [modo, setModo] = useState('mlParaMcgKgMin');
-  const [v, setV] = useState({ mlh:'', conc:'', peso:'', dose:'', mgh:'', mcgh:'' });
+  const [v, setV] = useState({ mlh:'', conc:'', peso:'', dose:'', mgh:'', mcgh:'', uimin:'', uiConc:'' });
   const n = x => Number(String(x||'').replace(',','.')) || 0;
   let resultado = '';
   if (modo === 'mlParaMcgKgMin') resultado = n(v.conc) && n(v.peso) ? ((n(v.mlh)*n(v.conc))/(n(v.peso)*60)).toFixed(3) + ' mcg/kg/min' : '';
   if (modo === 'mcgKgMinParaMl') resultado = n(v.conc) ? ((n(v.dose)*n(v.peso)*60)/n(v.conc)).toFixed(2) + ' mL/h' : '';
   if (modo === 'mgParaMcgHora') resultado = n(v.mgh) ? (n(v.mgh)*1000).toFixed(0) + ' mcg/h' : '';
   if (modo === 'mcgParaMgHora') resultado = n(v.mcgh) ? (n(v.mcgh)/1000).toFixed(3) + ' mg/h' : '';
+  if (modo === 'uiMinParaMl') resultado = n(v.uiConc) ? ((n(v.uimin)*60)/n(v.uiConc)).toFixed(2) + ' mL/h' : '';
+  if (modo === 'mlParaUiMin') resultado = n(v.uiConc) ? ((n(v.mlh)*n(v.uiConc))/60).toFixed(3) + ' UI/min' : '';
   return <Card C={C} style={{ marginBottom:16 }}><h3 className="lumen-serif" style={{ fontSize:18, margin:'0 0 10px' }}>Conversões rápidas</h3>
-    <select value={modo} onChange={e=>setModo(e.target.value)} style={{...inputStyle(C), maxWidth:360, marginBottom:12}}><option value="mlParaMcgKgMin">mL/h → mcg/kg/min</option><option value="mcgKgMinParaMl">mcg/kg/min → mL/h</option><option value="mgParaMcgHora">mg/h → mcg/h</option><option value="mcgParaMgHora">mcg/h → mg/h</option></select>
+    <select value={modo} onChange={e=>setModo(e.target.value)} style={{...inputStyle(C), maxWidth:360, marginBottom:12}}><option value="mlParaMcgKgMin">mL/h → mcg/kg/min</option><option value="mcgKgMinParaMl">mcg/kg/min → mL/h</option><option value="mgParaMcgHora">mg/h → mcg/h</option><option value="mcgParaMgHora">mcg/h → mg/h</option><option value="uiMinParaMl">UI/min → mL/h (vasopressina)</option><option value="mlParaUiMin">mL/h → UI/min (vasopressina)</option></select>
     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:10 }}>
       {modo==='mlParaMcgKgMin' && <><FormInput C={C} label="mL/h" value={v.mlh} onChange={x=>setV({...v,mlh:x})}/><FormInput C={C} label="Concentração mcg/mL" value={v.conc} onChange={x=>setV({...v,conc:x})}/><FormInput C={C} label="Peso kg" value={v.peso} onChange={x=>setV({...v,peso:x})}/></>}
       {modo==='mcgKgMinParaMl' && <><FormInput C={C} label="Dose mcg/kg/min" value={v.dose} onChange={x=>setV({...v,dose:x})}/><FormInput C={C} label="Peso kg" value={v.peso} onChange={x=>setV({...v,peso:x})}/><FormInput C={C} label="Concentração mcg/mL" value={v.conc} onChange={x=>setV({...v,conc:x})}/></>}
-      {modo==='mgParaMcgHora' && <FormInput C={C} label="mg/h" value={v.mgh} onChange={x=>setV({...v,mgh:x})}/>} {modo==='mcgParaMgHora' && <FormInput C={C} label="mcg/h" value={v.mcgh} onChange={x=>setV({...v,mcgh:x})}/>} </div>
+      {modo==='mgParaMcgHora' && <FormInput C={C} label="mg/h" value={v.mgh} onChange={x=>setV({...v,mgh:x})}/>} {modo==='mcgParaMgHora' && <FormInput C={C} label="mcg/h" value={v.mcgh} onChange={x=>setV({...v,mcgh:x})}/>} {modo==='uiMinParaMl' && <><FormInput C={C} label="Dose UI/min" value={v.uimin} onChange={x=>setV({...v,uimin:x})}/><FormInput C={C} label="Concentração UI/mL" value={v.uiConc} onChange={x=>setV({...v,uiConc:x})}/></>} {modo==='mlParaUiMin' && <><FormInput C={C} label="mL/h" value={v.mlh} onChange={x=>setV({...v,mlh:x})}/><FormInput C={C} label="Concentração UI/mL" value={v.uiConc} onChange={x=>setV({...v,uiConc:x})}/></>} </div>
     <div style={{ marginTop:12, padding:12, borderRadius:10, background:C.accentSoft, color:C.accent, fontWeight:800 }}>Resultado: {resultado || 'preencha os campos'}</div>
   </Card>;
 }
@@ -2841,7 +2896,7 @@ function EquivalenciasClinicas({ C }) {
   const cort = [
     ['Betametasona',30,0,'L',0.75],['Cortisona',0.8,0.8,'C',25],['Dexametasona',30,0,'L',0.75],['Fludrocortisona',10,125,'I',0],['Hidrocortisona',1,1,'C',20],['Metilprednisolona',5,0.5,'I',4],['Prednisona',4,0.8,'I',5],['Prednisolona',4,0.8,'I',5],['Triancinolona',5,0,'I',4]
   ];
-  const opio = [['Morfina VO','30 mg','referência'],['Morfina EV/SC','10 mg','aprox. 3:1 VO:parenteral'],['Oxicodona VO','20 mg','aprox.'],['Fentanil EV','100 mcg','aprox.'],['Codeína VO','200 mg','aprox.'],['Tramadol VO','300 mg','aprox.']];
+  const opio = [['Morfina VO','30 mg','referência'],['Morfina EV/SC','10 mg','aprox. 3:1 VO:parenteral'],['Codeína VO','200 mg','aprox.'],['Fentanil transdérmico','12,5 mcg/h','aprox.'],['Metadona VO','4 mg','aprox.; conversão variável, usar com cautela'],['Oxicodona VO','20 mg','aprox.'],['Tramadol VO','150 mg','aprox.'],['Hidromorfona VO','7,5 mg','aprox.']];
   const n = x => Number(String(x||'').replace(',','.')) || 0;
   const baseDe = cort.find(x=>x[0]===de)?.[4] || 1;
   const basePara = cort.find(x=>x[0]===para)?.[4] || 1;
