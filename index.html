@@ -1189,6 +1189,10 @@ function ResolverQuestao({ C, isDark, questao, lista, onUpdate, onEdit, onDelete
   const [comentarioEdit, setComentarioEdit] = useState(questao.comentarioDetalhado || '');
   const [criandoFlashcard, setCriandoFlashcard] = useState(false);
   const [novoFlash, setNovoFlash] = useState({ frente: '', verso: '' });
+  const toggleRiscada = (letra) => {
+    const atuais = questao.riscadasAlternativas || {};
+    onUpdate({ ...questao, riscadasAlternativas: { ...atuais, [letra]: !atuais[letra] } });
+  };
 
   useEffect(() => {
     setEscolha(questao.resposta || null);
@@ -1314,7 +1318,7 @@ const responderNovamente = () => {
         <div className="lumen-serif" style={{
           fontSize: 'clamp(14.5px, 1.5vw, 16px)', lineHeight: 1.75, color: C.text, fontWeight: 400,
         }}>
-          {questao.enunciado}
+          <HtmlText html={questao.enunciado} C={C} />
         </div>
       </Card>
 
@@ -1349,7 +1353,8 @@ const responderNovamente = () => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 700, fontSize: 14, flexShrink: 0
               }}>{alt.letra}</div>
-              <span style={{ flex: 1 }}>{alt.texto}</span>
+              <span style={{ flex: 1, textDecoration: questao.riscadasAlternativas?.[alt.letra] ? 'line-through' : 'none', opacity: questao.riscadasAlternativas?.[alt.letra] ? 0.55 : 1 }}><HtmlText html={alt.texto} C={C} /></span>
+              {!confirmada && <span onClick={(e) => { e.stopPropagation(); toggleRiscada(alt.letra); }} title="Riscar alternativa eliminada" style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.borderSoft}`, color: questao.riscadasAlternativas?.[alt.letra] ? C.error : C.textSoft, fontSize: 12, fontWeight: 800 }}>S</span>}
               <span style={{ color: isCorreta ? C.success : C.error }}>{indicator}</span>
             </button>
           );
@@ -1415,7 +1420,7 @@ const responderNovamente = () => {
                 {questao.acertou ? 'Correto!' : 'Incorreto'}
               </div>
               <div style={{ fontSize: 14, color: C.text, lineHeight: 1.55 }}>
-                {questao.comentarioBreve}
+                <HtmlText html={questao.comentarioBreve} C={C} />
               </div>
             </div>
           </div>
@@ -1458,10 +1463,7 @@ const responderNovamente = () => {
                 </div>
                 {editandoComentario ? (
                   <>
-                    <textarea value={comentarioEdit} onChange={e => setComentarioEdit(e.target.value)}
-                      style={{ width: '100%', minHeight: 180, padding: 12, borderRadius: 8,
-                        border: `1px solid ${C.border}`, background: C.bg, color: C.text,
-                        fontSize: 14, lineHeight: 1.6, resize: 'vertical' }} />
+                    <RichTextEditor C={C} value={comentarioEdit} onChange={setComentarioEdit} minHeight={180} />
                     <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                       <Button C={C} size="sm" icon={I.Save} onClick={() => {
                         onUpdate({ ...questao, comentarioDetalhado: comentarioEdit });
@@ -1471,7 +1473,7 @@ const responderNovamente = () => {
                   </>
                 ) : (
                   <div style={{ fontSize: 14, lineHeight: 1.7, color: C.text }}>
-                    {questao.comentarioDetalhado || <span style={{ color: C.textSoft }}>Nenhum comentário detalhado. Clique em Editar para adicionar.</span>}
+                    {questao.comentarioDetalhado ? <HtmlText html={questao.comentarioDetalhado} C={C} /> : <span style={{ color: C.textSoft }}>Nenhum comentário detalhado. Clique em Editar para adicionar.</span>}
                   </div>
                 )}
               </div>
@@ -1485,7 +1487,7 @@ const responderNovamente = () => {
                   border: `1px solid ${C.borderSoft}`, fontSize: 14,
                   lineHeight: 1.7, color: C.text
                 }}>
-                  {questao.dicaProva || <span style={{ color: C.textSoft }}>Nenhuma dica de prova cadastrada. Clique em “Editar questão” para adicionar.</span>}
+                  {questao.dicaProva ? <HtmlText html={questao.dicaProva} C={C} /> : <span style={{ color: C.textSoft }}>Nenhuma dica de prova cadastrada. Clique em “Editar questão” para adicionar.</span>}
                 </div>
               </div>
             )}
@@ -1502,9 +1504,9 @@ const responderNovamente = () => {
                           {alt.letra === questao.gabarito ? 'Gabarito' : 'Distrator'}
                         </span>
                       </div>
-                      <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.5, marginBottom: 6 }}>{alt.texto}</div>
+                      <HtmlText html={alt.texto} C={C} style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.5, marginBottom: 6 }} />
                       <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
-                        {alt.comentario || <span style={{ color: C.textSoft }}>Sem comentário cadastrado para esta alternativa.</span>}
+                        {alt.comentario ? <HtmlText html={alt.comentario} C={C} /> : <span style={{ color: C.textSoft }}>Sem comentário cadastrado para esta alternativa.</span>}
                       </div>
                     </div>
                   ))}
@@ -1716,8 +1718,7 @@ function CriarQuestao({ C, instituicoes, setInstituicoes, onSave, onCancel, ques
       <Card C={C} style={{ marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 14px', fontSize: 15, color: C.text }}>Enunciado e alternativas A–E</h3>
         <FormLabel C={C}>Enunciado</FormLabel>
-        <textarea value={q.enunciado} onChange={e => setQ({...q, enunciado: e.target.value})}
-          style={{ ...inputStyle(C), minHeight: 140, fontFamily: 'Fraunces, serif', fontSize: 14, lineHeight: 1.65 }} />
+        <RichTextEditor C={C} value={q.enunciado} onChange={v => setQ({...q, enunciado: v})} minHeight={140} />
 
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {q.alternativas.map((alt, i) => (
@@ -1729,12 +1730,8 @@ function CriarQuestao({ C, instituicoes, setInstituicoes, onSave, onCancel, ques
                 fontWeight: 700, fontSize: 14
               }}>{alt.letra}</button>
               <div>
-                <textarea value={alt.texto} onChange={e => setAlt(i, 'texto', e.target.value)}
-                  placeholder={`Alternativa ${alt.letra} — deixe em branco se a prova tiver apenas A-D`}
-                  style={{ ...inputStyle(C), minHeight: 38, padding: '9px 12px', fontSize: 13.5 }} />
-                <textarea value={alt.comentario || ''} onChange={e => setAlt(i, 'comentario', e.target.value)}
-                  placeholder={`Comentário da alternativa ${alt.letra} — por que está correta/incorreta`}
-                  style={{ ...inputStyle(C), minHeight: 54, marginTop: 6, padding: '8px 12px', fontSize: 12.5 }} />
+                <RichTextEditor C={C} value={alt.texto} onChange={v => setAlt(i, 'texto', v)} minHeight={48} placeholder={`Alternativa ${alt.letra} — deixe em branco se a prova tiver apenas A-D`} />
+                <div style={{ marginTop: 6 }}><RichTextEditor C={C} value={alt.comentario || ''} onChange={v => setAlt(i, 'comentario', v)} minHeight={64} placeholder={`Comentário da alternativa ${alt.letra} — por que está correta/incorreta`} /></div>
               </div>
             </div>
           ))}
@@ -1747,15 +1744,11 @@ function CriarQuestao({ C, instituicoes, setInstituicoes, onSave, onCancel, ques
       <Card C={C} style={{ marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 14px', fontSize: 15, color: C.text }}>Comentários gerais</h3>
         <FormLabel C={C}>Comentário breve após confirmar resposta</FormLabel>
-        <textarea value={q.comentarioBreve} onChange={e => setQ({...q, comentarioBreve: e.target.value})}
-          style={{ ...inputStyle(C), minHeight: 70 }} />
+        <RichTextEditor C={C} value={q.comentarioBreve} onChange={v => setQ({...q, comentarioBreve: v})} minHeight={70} />
         <FormLabel C={C} style={{ marginTop: 12 }}>Comentário detalhado</FormLabel>
-        <textarea value={q.comentarioDetalhado} onChange={e => setQ({...q, comentarioDetalhado: e.target.value})}
-          style={{ ...inputStyle(C), minHeight: 120 }} />
+        <RichTextEditor C={C} value={q.comentarioDetalhado} onChange={v => setQ({...q, comentarioDetalhado: v})} minHeight={120} />
         <FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova</FormLabel>
-        <textarea value={q.dicaProva || ''} onChange={e => setQ({...q, dicaProva: e.target.value})}
-          placeholder="Macete, pegadinha ou ponto que costuma cair na prova"
-          style={{ ...inputStyle(C), minHeight: 70 }} />
+        <RichTextEditor C={C} value={q.dicaProva || ''} onChange={v => setQ({...q, dicaProva: v})} minHeight={70} placeholder="Macete, pegadinha ou ponto que costuma cair na prova" />
         <FormLabel C={C} style={{ marginTop: 12 }}>Checklist (3-4 pontos essenciais)</FormLabel>
         {q.checklist.map((c, i) => (
           <input key={i} value={c} onChange={e => {
@@ -1787,6 +1780,76 @@ const inputStyle = (C) => ({
   border: `1px solid ${C.border}`, background: C.bg, color: C.text,
   fontSize: 14, resize: 'vertical', fontFamily: 'inherit'
 });
+
+
+
+// ============= EDITOR RICO, UTILITÁRIOS DE TEXTO E CÁLCULO =============
+function RichTextEditor({ C, value, onChange, minHeight = 90, placeholder = 'Digite aqui...' }) {
+  const ref = useRef(null);
+  const colors = [
+    ['#1d4ed8','Azul'], ['#db2777','Rosa'], ['#15803d','Verde'], ['#dc2626','Vermelho'], ['#ca8a04','Amarelo'], ['#111827','Preto']
+  ];
+  const marks = [['#fff59d','Amarelo'], ['#e5e7eb','Cinza claro'], ['#bbf7d0','Verde']];
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== (value || '')) ref.current.innerHTML = value || '';
+  }, [value]);
+  const exec = (cmd, val = null) => {
+    document.execCommand(cmd, false, val);
+    if (ref.current) onChange(ref.current.innerHTML);
+    ref.current?.focus();
+  };
+  return <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden', background: C.bg }}>
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: 7, borderBottom: `1px solid ${C.borderSoft}`, background: C.card }}>
+      <button type="button" onClick={() => exec('bold')} style={toolbarBtn(C)}><b>B</b></button>
+      <button type="button" onClick={() => exec('italic')} style={toolbarBtn(C)}><i>I</i></button>
+      <button type="button" onClick={() => exec('underline')} style={toolbarBtn(C)}><u>U</u></button>
+      <button type="button" onClick={() => exec('fontSize', '4')} style={toolbarBtn(C)}>Título</button>
+      <select title="Marca texto" onChange={e => { if(e.target.value) exec('hiliteColor', e.target.value); e.target.value=''; }} style={toolbarSelect(C)}>
+        <option value="">Marca texto</option>{marks.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+      <select title="Cor da letra" onChange={e => { if(e.target.value) exec('foreColor', e.target.value); e.target.value=''; }} style={toolbarSelect(C)}>
+        <option value="">Cor da letra</option>{colors.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+    </div>
+    <div ref={ref} contentEditable suppressContentEditableWarning
+      onInput={e => onChange(e.currentTarget.innerHTML)}
+      data-placeholder={placeholder}
+      style={{ minHeight, padding: 12, color: C.text, fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap' }} />
+    <style>{`[contenteditable][data-placeholder]:empty:before{content:attr(data-placeholder);color:${C.textSoft};}`}</style>
+  </div>;
+}
+const toolbarBtn = C => ({ padding: '5px 9px', borderRadius: 6, background: C.bg, color: C.text, border: `1px solid ${C.borderSoft}`, fontSize: 12, fontWeight: 700 });
+const toolbarSelect = C => ({ padding: '5px 8px', borderRadius: 6, background: C.bg, color: C.text, border: `1px solid ${C.borderSoft}`, fontSize: 12, fontWeight: 600 });
+const HtmlText = ({ html, C, style = {} }) => html ? <div className="lumen-html" dangerouslySetInnerHTML={{__html: html}} style={{ whiteSpace: 'pre-wrap', lineHeight: 1.65, color: C.text, ...style }} /> : null;
+function plainText(html='') { const d=document.createElement('div'); d.innerHTML=String(html||''); return d.textContent || d.innerText || ''; }
+function safeEvalFormula(expr, vars) {
+  let js = String(expr || '').replace(/,/g,'.').replace(/\^/g,'**');
+  Object.entries(vars || {}).forEach(([k,v]) => { js = js.replace(new RegExp('\\b'+k+'\\b','g'), `(${Number(v)||0})`); });
+  if (!/^[0-9+\-*/().\s<>=!&|?:%*]+$/.test(js)) throw new Error('Fórmula contém caracteres não permitidos.');
+  return Function(`"use strict"; return (${js})`)();
+}
+function ScoreTableEditor({ C, table, onChange }) {
+  const t = table || { columns: ['Pergunta','Pontuação'], rows: [] };
+  const setCell = (ri, ci, val) => onChange({ ...t, rows: (t.rows||[]).map((r,i)=> i===ri ? (t.columns||[]).map((_,c)=> c===ci ? val : (r?.[c]||'')) : r) });
+  const addRow = () => onChange({ ...t, rows: [...(t.rows||[]), (t.columns||[]).map(()=> '')] });
+  const addCol = () => { const nome = prompt('Nome da coluna:'); if (!nome) return; onChange({ columns: [...(t.columns||[]), nome], rows: (t.rows||[]).map(r => [...r, '']) }); };
+  return <div style={{ border: `1px solid ${C.borderSoft}`, borderRadius: 10, overflowX: 'auto' }} className="lumen-scroll">
+    <table style={{ width: '100%', minWidth: 520, borderCollapse: 'collapse' }}><thead><tr>{(t.columns||[]).map((c,ci)=><th key={ci} style={{ padding: 8, borderBottom: `1px solid ${C.borderSoft}`, textAlign:'left' }}><input value={c} onChange={e=>onChange({...t, columns:(t.columns||[]).map((x,i)=>i===ci?e.target.value:x)})} style={{...inputStyle(C), padding:'6px 8px', fontWeight:700}} /></th>)}</tr></thead><tbody>{(t.rows||[]).map((r,ri)=><tr key={ri}>{(t.columns||[]).map((_,ci)=><td key={ci} style={{ padding: 6, borderBottom: `1px solid ${C.borderSoft}` }}><textarea value={r?.[ci]||''} onChange={e=>setCell(ri,ci,e.target.value)} style={{...inputStyle(C), minHeight:38, padding:'6px 8px'}} /></td>)}</tr>)}</tbody></table>
+    <div style={{ display:'flex', gap:8, padding:8 }}><Button C={C} size="sm" variant="secondary" onClick={addRow}>Adicionar linha</Button><Button C={C} size="sm" variant="secondary" onClick={addCol}>Adicionar coluna</Button></div>
+  </div>;
+}
+function ExecutableCalculator({ item, C }) {
+  const nomes = useMemo(() => [...new Set(String(item.variaveis || '').split(/[,;\n]/).map(v=>v.trim()).filter(Boolean))], [item.variaveis]);
+  const [vals, setVals] = useState({});
+  const [res, setRes] = useState(null);
+  const calc = () => { try { setRes(safeEvalFormula(item.formulaExecutavel || item.formula || '', vals)); } catch(e) { alert(e.message); } };
+  if (!item.formulaExecutavel) return null;
+  return <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: C.bg, border: `1px solid ${C.borderSoft}` }}>
+    <div style={{ fontSize: 12, color: C.textSoft, fontWeight: 700, marginBottom: 8 }}>EXECUTAR CÁLCULO</div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>{nomes.map(v => <div key={v}><FormLabel C={C}>{v}</FormLabel><input type="number" value={vals[v]||''} onChange={e=>setVals({...vals,[v]:e.target.value})} style={{...inputStyle(C), padding:'7px 9px'}} /></div>)}</div>
+    <Button C={C} size="sm" onClick={calc} style={{ marginTop: 10 }}>Calcular</Button>{res !== null && <div style={{ marginTop: 10, fontSize: 18, fontWeight: 800, color: C.accent }}>Resultado: {String(res)}</div>}
+  </div>;
+}
 
 // ============= SIMULADO =============
 function Simulado({ questoes, setQuestoes, instituicoes, C, isDark }) {
@@ -1864,7 +1927,7 @@ function Simulado({ questoes, setQuestoes, instituicoes, C, isDark }) {
         {(q.alternativas || []).filter(a => (a.texto || '').trim()).map(alt => {
           const sel = respostas[q.id] === alt.letra;
           return <button key={alt.letra} onClick={() => setRespostas({...respostas, [q.id]: alt.letra})} style={{ padding: '12px 14px', borderRadius: 8, textAlign: 'left', background: sel ? C.accentSoft : C.card, border: `1.5px solid ${sel ? C.accent : C.borderSoft}`, display: 'flex', gap: 12, alignItems: 'center', color: C.text, fontSize: 14 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: sel ? C.accent : C.borderSoft, color: sel ? '#fff' : C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{alt.letra}</div>{alt.texto}
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: sel ? C.accent : C.borderSoft, color: sel ? '#fff' : C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{alt.letra}</div><HtmlText html={alt.texto} C={C} />
           </button>;
         })}
       </div>
@@ -1904,14 +1967,13 @@ function Flashcards({ flashcards, setFlashcards, questoes, setPage, C }) {
   const [filtroRevisao, setFiltroRevisao] = useState('todos');
   const [revisIdx, setRevisIdx] = useState(0);
   const [mostrar, setMostrar] = useState(false);
+  const [editandoId, setEditandoId] = useState(null);
   const [novoSubtema, setNovoSubtema] = useState('');
   const [novo, setNovo] = useState({ frente: '', verso: '', tema: 'cardio', subtema: '', tags: [], dificuldade: 'media' });
-
   const hoje = new Date();
   const normalizarData = (d) => d ? new Date(d) : null;
   const estaVencido = (f) => !f.proximaRevisao || normalizarData(f.proximaRevisao) <= hoje || f.revisarHoje;
   const subtemas = [...new Set(flashcards.filter(f => filtroTema === 'todos' || f.tema === filtroTema).map(f => f.subtema).filter(Boolean))].sort();
-
   const filtrados = flashcards.filter(f => {
     if (filtroTema !== 'todos' && f.tema !== filtroTema) return false;
     if (filtroSubtema !== 'todos' && (f.subtema || '') !== filtroSubtema) return false;
@@ -1919,109 +1981,49 @@ function Flashcards({ flashcards, setFlashcards, questoes, setPage, C }) {
     if (filtroRevisao === 'futuros' && estaVencido(f)) return false;
     return true;
   });
-  const paraRevisar = filtrados.filter(estaVencido);
-  const filaRevisao = paraRevisar.length ? paraRevisar : filtrados;
-
+  const filaRevisao = (filtrados.filter(estaVencido).length ? filtrados.filter(estaVencido) : filtrados);
   const salvar = () => {
-    if (!novo.frente.trim() || !novo.verso.trim()) return;
-    setFlashcards([{
-      ...novo,
-      id: 'f-' + Date.now(),
-      dataCriacao: new Date().toISOString(),
-      proximaRevisao: new Date().toISOString(),
-      intervaloDias: 0,
-      revisarHoje: true,
-      historico: [],
-      questaoId: null
-    }, ...flashcards]);
-    setNovo({ frente: '', verso: '', tema: novo.tema, subtema: novo.subtema, tags: [], dificuldade: 'media' });
-    setView('lista');
+    if (!plainText(novo.frente).trim() || !plainText(novo.verso).trim()) return;
+    const payload = { ...novo, dataCriacao: novo.dataCriacao || new Date().toISOString(), proximaRevisao: novo.proximaRevisao || new Date().toISOString(), intervaloDias: novo.intervaloDias || 0, revisarHoje: novo.revisarHoje ?? true, historico: novo.historico || [], questaoId: novo.questaoId || null };
+    if (editandoId) setFlashcards(flashcards.map(f => f.id === editandoId ? { ...payload, id: editandoId } : f));
+    else setFlashcards([{ ...payload, id: 'f-' + Date.now() }, ...flashcards]);
+    setNovo({ frente: '', verso: '', tema: novo.tema, subtema: novo.subtema, tags: [], dificuldade: 'media' }); setEditandoId(null); setView('lista');
   };
-
+  const abrirEdicao = (f) => { setNovo({ ...f }); setEditandoId(f.id); setView('criar'); };
   const revisar = (f, nivel) => {
-    const mapa = {
-      dificil: { dias: 1, label: 'Difícil' },
-      medio: { dias: Math.max(3, (f.intervaloDias || 1) * 2), label: 'Médio' },
-      facil: { dias: Math.max(7, (f.intervaloDias || 1) * 3), label: 'Fácil' },
-    };
-    const regra = mapa[nivel];
-    const prox = new Date();
-    prox.setDate(prox.getDate() + regra.dias);
-    setFlashcards(flashcards.map(x => x.id === f.id ? {
-      ...x,
-      dificuldade: nivel,
-      intervaloDias: regra.dias,
-      proximaRevisao: prox.toISOString(),
-      revisarHoje: false,
-      historico: [...(x.historico || []), { data: new Date().toISOString(), nivel, intervaloDias: regra.dias }]
-    } : x));
-    setMostrar(false);
-    setRevisIdx(revisIdx + 1);
+    const mapa = { dificil: 1, medio: Math.max(3, (f.intervaloDias || 1) * 2), facil: Math.max(7, (f.intervaloDias || 1) * 3) };
+    const prox = new Date(); prox.setDate(prox.getDate() + mapa[nivel]);
+    setFlashcards(flashcards.map(x => x.id === f.id ? { ...x, dificuldade: nivel, intervaloDias: mapa[nivel], proximaRevisao: prox.toISOString(), revisarHoje: false, historico: [...(x.historico || []), { data: new Date().toISOString(), nivel, intervaloDias: mapa[nivel] }] } : x));
+    setMostrar(false); setRevisIdx(revisIdx + 1);
   };
-
-  const irParaQuestao = (questaoId) => {
-    if (!questaoId) return;
-    storage.set('lumen_open_question', questaoId);
-    setPage('questoes');
-  };
-
+  const irParaQuestao = (questaoId) => { if (!questaoId) return; storage.set('lumen_open_question', questaoId); setPage('questoes'); };
   if (view === 'revisar' && filaRevisao.length > 0) {
-    const f = filaRevisao[revisIdx % filaRevisao.length];
-    const tema = ESPECIALIDADES.find(t => t.id === f.tema);
-    return <div className="lumen-fade-in" style={{ maxWidth: 760, margin: '0 auto' }}>
+    const f = filaRevisao[revisIdx % filaRevisao.length]; const tema = ESPECIALIDADES.find(t => t.id === f.tema);
+    return <div className="lumen-fade-in" style={{ maxWidth: 980, margin: '0 auto' }}>
       <Button C={C} variant="ghost" icon={I.ArrowL} onClick={() => setView('lista')} style={{ marginBottom: 16 }}>Voltar</Button>
-      <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 13, color: C.textMuted }}>
-        {revisIdx + 1} de {filaRevisao.length} · {tema?.nome || 'Especialidade'} {f.subtema ? `• ${f.subtema}` : ''}
-      </div>
-      <Card C={C} onClick={() => setMostrar(!mostrar)} style={{ minHeight: 320, padding: 40, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-        <div>
-          <div style={{ fontSize: 11, color: C.textSoft, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>{mostrar ? 'Verso' : 'Frente'}</div>
-          <div className="lumen-serif" style={{ fontSize: 'clamp(18px, 3vw, 26px)', lineHeight: 1.4, color: C.text, fontWeight: 500 }}>{mostrar ? f.verso : f.frente}</div>
-          {!mostrar && <div style={{ marginTop: 24, fontSize: 12, color: C.textSoft }}>Clique para virar</div>}
-        </div>
+      <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 13, color: C.textMuted }}>{revisIdx + 1} de {filaRevisao.length} · {tema?.nome || 'Especialidade'} {f.subtema ? `• ${f.subtema}` : ''}</div>
+      <Card C={C} onClick={() => setMostrar(!mostrar)} style={{ minHeight: 420, padding: 'clamp(28px, 5vw, 56px)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <div style={{ width: '100%' }}><div style={{ fontSize: 11, color: C.textSoft, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 18 }}>{mostrar ? 'Verso' : 'Frente'}</div><HtmlText html={mostrar ? f.verso : f.frente} C={C} style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontFamily: 'Fraunces, Georgia, serif', fontWeight: 500 }} />{!mostrar && <div style={{ marginTop: 24, fontSize: 12, color: C.textSoft }}>Clique para virar</div>}</div>
       </Card>
-      {f.questaoId && <div style={{ textAlign: 'center', marginTop: 12 }}><Button C={C} variant="secondary" size="sm" icon={I.Book} onClick={() => irParaQuestao(f.questaoId)}>Ir diretamente para a questão</Button></div>}
-      {mostrar && <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-        <Button C={C} variant="danger" onClick={() => revisar(f, 'dificil')}>Difícil · revisar em 1 dia</Button>
-        <Button C={C} variant="secondary" onClick={() => revisar(f, 'medio')}>Médio · revisar em poucos dias</Button>
-        <Button C={C} variant="success" onClick={() => revisar(f, 'facil')}>Fácil · revisar em 1 semana+</Button>
-      </div>}
+      <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop: 12, flexWrap:'wrap' }}><Button C={C} variant="secondary" size="sm" icon={I.Edit} onClick={() => abrirEdicao(f)}>Editar flashcard</Button>{f.questaoId && <Button C={C} variant="secondary" size="sm" icon={I.Book} onClick={() => irParaQuestao(f.questaoId)}>Ir diretamente para a questão</Button>}</div>
+      {mostrar && <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'center', flexWrap: 'wrap' }}><Button C={C} variant="danger" onClick={() => revisar(f, 'dificil')}>Difícil · 1 dia</Button><Button C={C} variant="secondary" onClick={() => revisar(f, 'medio')}>Médio · poucos dias</Button><Button C={C} variant="success" onClick={() => revisar(f, 'facil')}>Fácil · 1 semana+</Button></div>}
     </div>;
   }
-
   if (view === 'criar') {
     const subtemasDaEspecialidade = [...new Set(flashcards.filter(f => f.tema === novo.tema).map(f => f.subtema).filter(Boolean))].sort();
-    return <div className="lumen-fade-in"><Button C={C} variant="ghost" icon={I.ArrowL} onClick={() => setView('lista')} style={{ marginBottom: 16 }}>Voltar</Button><Card C={C}>
-      <h3 className="lumen-serif" style={{ fontSize: 22, margin: '0 0 16px' }}>Novo flashcard</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <div><FormLabel C={C}>Especialidade</FormLabel><select value={novo.tema} onChange={e => setNovo({...novo, tema: e.target.value, subtema: ''})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div>
-        <div><FormLabel C={C}>Subtema</FormLabel><select value={novo.subtema} onChange={e => setNovo({...novo, subtema: e.target.value})} style={inputStyle(C)}><option value="">Sem subtema</option>{subtemasDaEspecialidade.map(s => <option key={s}>{s}</option>)}</select></div>
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <input value={novoSubtema} onChange={e => setNovoSubtema(e.target.value)} placeholder="Adicionar novo subtema nesta especialidade" style={{ ...inputStyle(C), padding: '8px 10px' }} />
-        <Button C={C} variant="secondary" onClick={() => { if (novoSubtema.trim()) { setNovo({...novo, subtema: novoSubtema.trim()}); setNovoSubtema(''); } }}>Usar subtema</Button>
-      </div>
-      <FormLabel C={C}>Frente</FormLabel><textarea value={novo.frente} onChange={e => setNovo({...novo, frente: e.target.value})} style={{ ...inputStyle(C), minHeight: 80, marginBottom: 12 }} />
-      <FormLabel C={C}>Verso</FormLabel><textarea value={novo.verso} onChange={e => setNovo({...novo, verso: e.target.value})} style={{ ...inputStyle(C), minHeight: 100, marginBottom: 12 }} />
-      <div style={{ maxWidth: 220, marginBottom: 16 }}><FormLabel C={C}>Dificuldade inicial</FormLabel><select value={novo.dificuldade} onChange={e => setNovo({...novo, dificuldade: e.target.value})} style={inputStyle(C)}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select></div>
+    return <div className="lumen-fade-in"><Button C={C} variant="ghost" icon={I.ArrowL} onClick={() => { setView('lista'); setEditandoId(null); }} style={{ marginBottom: 16 }}>Voltar</Button><Card C={C}>
+      <h3 className="lumen-serif" style={{ fontSize: 22, margin: '0 0 16px' }}>{editandoId ? 'Editar flashcard' : 'Novo flashcard'}</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}><div><FormLabel C={C}>Especialidade</FormLabel><select value={novo.tema} onChange={e => setNovo({...novo, tema: e.target.value, subtema: ''})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><div><FormLabel C={C}>Subtema</FormLabel><select value={novo.subtema} onChange={e => setNovo({...novo, subtema: e.target.value})} style={inputStyle(C)}><option value="">Sem subtema</option>{subtemasDaEspecialidade.map(s => <option key={s}>{s}</option>)}</select></div></div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}><input value={novoSubtema} onChange={e => setNovoSubtema(e.target.value)} placeholder="Adicionar novo subtema" style={{ ...inputStyle(C), padding: '8px 10px' }} /><Button C={C} variant="secondary" onClick={() => { if (novoSubtema.trim()) { setNovo({...novo, subtema: novoSubtema.trim()}); setNovoSubtema(''); } }}>Usar</Button></div>
+      <FormLabel C={C}>Frente</FormLabel><RichTextEditor C={C} value={novo.frente} onChange={v => setNovo({...novo, frente:v})} minHeight={100} />
+      <FormLabel C={C} style={{ marginTop: 12 }}>Verso</FormLabel><RichTextEditor C={C} value={novo.verso} onChange={v => setNovo({...novo, verso:v})} minHeight={130} />
+      <div style={{ maxWidth: 220, marginTop: 12, marginBottom: 16 }}><FormLabel C={C}>Dificuldade inicial</FormLabel><select value={novo.dificuldade} onChange={e => setNovo({...novo, dificuldade: e.target.value})} style={inputStyle(C)}><option value="facil">Fácil</option><option value="media">Média</option><option value="dificil">Difícil</option></select></div>
       <Button C={C} icon={I.Save} onClick={salvar}>Salvar flashcard</Button>
     </Card></div>;
   }
-
-  return <div className="lumen-fade-in">
-    <Card C={C} style={{ marginBottom: 16 }}>
-      <h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 8px' }}>Organização dos flashcards</h3>
-      <p style={{ margin: 0, color: C.textMuted, fontSize: 13 }}>Agora os flashcards ficam por especialidade e subtema. A revisão espaçada é calculada conforme a dificuldade escolhida ao responder.</p>
-    </Card>
-    <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
-      <Button C={C} icon={I.Plus} onClick={() => setView('criar')}>Novo flashcard</Button>
-      <Button C={C} variant="secondary" icon={I.Play} onClick={() => { setRevisIdx(0); setMostrar(false); setView('revisar'); }} disabled={filaRevisao.length === 0}>Revisar ({filaRevisao.length})</Button>
-      <select value={filtroTema} onChange={e => { setFiltroTema(e.target.value); setFiltroSubtema('todos'); }} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 13 }}><option value="todos">Todas as especialidades</option>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select>
-      <select value={filtroSubtema} onChange={e => setFiltroSubtema(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 13 }}><option value="todos">Todos os subtemas</option>{subtemas.map(s => <option key={s}>{s}</option>)}</select>
-      <select value={filtroRevisao} onChange={e => setFiltroRevisao(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 13 }}><option value="todos">Todos</option><option value="vencidos">Para revisar hoje</option><option value="futuros">Agendados para depois</option></select>
-    </div>
-    {filtrados.length === 0 ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Layers size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12, marginBottom: 4 }}>Nenhum flashcard ainda.</div><div style={{ fontSize: 13, color: C.textSoft }}>Crie flashcards por especialidade e subtema.</div></Card> :
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>{filtrados.map(f => { const tema = ESPECIALIDADES.find(t => t.id === f.tema); const prox = f.proximaRevisao ? new Date(f.proximaRevisao).toLocaleDateString('pt-BR') : 'hoje'; return <Card key={f.id} C={C} hover style={{ padding: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, gap: 6, flexWrap: 'wrap' }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<Badge C={C} color="soft">{f.subtema || 'Sem subtema'}</Badge>{f.questaoId && <Badge C={C} color="soft">Q vinculada</Badge>}</div><div className="lumen-serif" style={{ fontSize: 15, fontWeight: 500, color: C.text, marginBottom: 8, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{f.frente}</div><div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{f.verso}</div><div style={{ marginTop: 10, fontSize: 12, color: estaVencido(f) ? C.error : C.textSoft }}>Próxima revisão: {prox}</div><div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>{f.questaoId && <Button C={C} variant="secondary" size="sm" icon={I.Book} onClick={() => irParaQuestao(f.questaoId)}>Ir para questão</Button>}<button onClick={() => { if (confirm('Deletar este flashcard?')) setFlashcards(flashcards.filter(x => x.id !== f.id)); }} style={{ padding: 6, color: C.textSoft, display: 'flex' }}><I.Trash size={13} /></button></div></Card>; })}</div>}
+  return <div className="lumen-fade-in"><Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 8px' }}>Organização dos flashcards</h3><p style={{ margin: 0, color: C.textMuted, fontSize: 13 }}>Agora os flashcards têm editor rico, revisão espaçada e edição também durante a revisão.</p></Card>
+    <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}><Button C={C} icon={I.Plus} onClick={() => { setNovo({ frente: '', verso: '', tema: 'cardio', subtema: '', tags: [], dificuldade: 'media' }); setEditandoId(null); setView('criar'); }}>Novo flashcard</Button><Button C={C} variant="secondary" icon={I.Play} onClick={() => { setRevisIdx(0); setMostrar(false); setView('revisar'); }} disabled={filaRevisao.length === 0}>Revisar ({filaRevisao.length})</Button><select value={filtroTema} onChange={e => { setFiltroTema(e.target.value); setFiltroSubtema('todos'); }} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 13 }}><option value="todos">Todas as especialidades</option>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select><select value={filtroSubtema} onChange={e => setFiltroSubtema(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 13 }}><option value="todos">Todos os subtemas</option>{subtemas.map(s => <option key={s}>{s}</option>)}</select><select value={filtroRevisao} onChange={e => setFiltroRevisao(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.text, fontSize: 13 }}><option value="todos">Todos</option><option value="vencidos">Para revisar hoje</option><option value="futuros">Agendados</option></select></div>
+    {filtrados.length === 0 ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Layers size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum flashcard ainda.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>{filtrados.map(f => { const tema = ESPECIALIDADES.find(t => t.id === f.tema); const prox = f.proximaRevisao ? new Date(f.proximaRevisao).toLocaleDateString('pt-BR') : 'hoje'; return <Card key={f.id} C={C} hover style={{ padding: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, gap: 6, flexWrap: 'wrap' }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<Badge C={C} color="soft">{f.subtema || 'Sem subtema'}</Badge>{f.questaoId && <Badge C={C} color="soft">Q vinculada</Badge>}</div><HtmlText html={f.frente} C={C} style={{ fontSize: 15, fontWeight: 600, maxHeight: 76, overflow:'hidden' }} /><HtmlText html={f.verso} C={C} style={{ fontSize: 13, color: C.textMuted, maxHeight: 50, overflow:'hidden', marginTop:6 }} /><div style={{ marginTop: 10, fontSize: 12, color: estaVencido(f) ? C.error : C.textSoft }}>Próxima revisão: {prox}</div><div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>{f.questaoId && <Button C={C} variant="secondary" size="sm" icon={I.Book} onClick={() => irParaQuestao(f.questaoId)}>Questão</Button>}<Button C={C} variant="secondary" size="sm" icon={I.Edit} onClick={() => abrirEdicao(f)}>Editar</Button><button onClick={() => { if (confirm('Deletar este flashcard?')) setFlashcards(flashcards.filter(x => x.id !== f.id)); }} style={{ padding: 6, color: C.textSoft, display: 'flex' }}><I.Trash size={13} /></button></div></Card>; })}</div>}
   </div>;
 }
 
@@ -2255,6 +2257,8 @@ function Artigos({ artigos, setArtigos, C }) {
   const [filtroTema, setFiltroTema] = useState('todos');
   const [filtroAno, setFiltroAno] = useState('todos');
   const [form, setForm] = useState(artigoVazio());
+  const [artigoAberto, setArtigoAberto] = useState(null);
+  const [menuLeituraAberto, setMenuLeituraAberto] = useState(true);
 
   const [resumos, setResumos] = useState(() => storage.get('lumen_resumos_biblioteca', []));
   const [editingResumo, setEditingResumo] = useState(null);
@@ -2262,6 +2266,7 @@ function Artigos({ artigos, setArtigos, C }) {
   const [filtroResumoTema, setFiltroResumoTema] = useState('todos');
   const [filtroResumoSubtema, setFiltroResumoSubtema] = useState('todos');
   const [resumoForm, setResumoForm] = useState(resumoVazio());
+  const [resumoAberto, setResumoAberto] = useState(null);
 
   useEffect(() => { storage.set('lumen_resumos_biblioteca', resumos); }, [resumos]);
 
@@ -2280,6 +2285,64 @@ function Artigos({ artigos, setArtigos, C }) {
     if (filtroResumoSubtema !== 'todos' && (r.subtema || '') !== filtroResumoSubtema) return false;
     return true;
   });
+
+  const artigoSelecionado = artigos.find(a => a.id === artigoAberto);
+  if (artigoSelecionado) {
+    const temaSel = ESPECIALIDADES.find(t => t.id === artigoSelecionado.tema);
+    const secoesArtigo = [
+      ['Resumo estruturado', artigoSelecionado.resumo],
+      ['Principais recomendações', artigoSelecionado.recomendacoes],
+      ['Pontos práticos', artigoSelecionado.praticos],
+      ['Condutas que mudam prática', artigoSelecionado.mudaPratica],
+      ['Observações pessoais', artigoSelecionado.observacoes]
+    ].filter(([,txt]) => plainText(txt || '').trim());
+    return <div className="lumen-fade-in">
+      <Button C={C} variant="ghost" size="sm" icon={I.ArrowL} onClick={() => setArtigoAberto(null)} style={{ marginBottom: 16 }}>Voltar à biblioteca</Button>
+      <div className="lumen-grid-resp" style={{ display:'grid', gridTemplateColumns: menuLeituraAberto ? '260px minmax(0, 1fr)' : '46px minmax(0, 1fr)', gap:18, alignItems:'start' }}>
+        <Card C={C} style={{ position:'sticky', top:80, padding: menuLeituraAberto ? 16 : 10 }}>
+          <button onClick={() => setMenuLeituraAberto(!menuLeituraAberto)} style={{ width:'100%', color:C.accent, fontWeight:800, fontSize:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>{menuLeituraAberto ? 'Tópicos' : '☰'}{menuLeituraAberto && <I.ChevL size={14}/>}</button>
+          {menuLeituraAberto && <div style={{ marginTop:10 }}>{secoesArtigo.map(([titulo]) => <a key={titulo} href={'#'+slugify(titulo)} style={{ display:'block', padding:'9px 10px', borderRadius:8, color:C.textMuted, textDecoration:'none', fontSize:13, fontWeight:700 }}>{titulo}</a>)}</div>}
+        </Card>
+        <Card C={C} style={{ padding:'clamp(22px, 4vw, 38px)' }}>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>{temaSel && <Badge C={C}>{temaSel.nome}</Badge>}<Badge C={C} color="soft">{artigoSelecionado.fonte}</Badge><Badge C={C} color="soft">{artigoSelecionado.ano}</Badge></div>
+          <h2 className="lumen-serif" style={{ fontSize:'clamp(26px,4vw,38px)', margin:'0 0 16px', lineHeight:1.15, color:C.text }}>{artigoSelecionado.titulo}</h2>
+          {artigoSelecionado.link && <a href={artigoSelecionado.link} target="_blank" rel="noreferrer" style={{ color:C.accent, fontWeight:700, fontSize:13 }}>Abrir fonte original ↗</a>}
+          <div style={{ marginTop:22 }}>{secoesArtigo.map(([titulo, txt]) => <section id={slugify(titulo)} key={titulo} style={{ marginBottom:24, scrollMarginTop:90 }}>
+            <h3 style={{ fontSize:18, margin:'0 0 10px', padding:'10px 12px', borderRadius:10, color:C.accent, background:C.accentSoft, display:'inline-block' }}>{titulo}</h3>
+            <HtmlText html={txt} C={C} style={{ fontSize:15.5, lineHeight:1.8 }} />
+          </section>)}</div>
+        </Card>
+      </div>
+    </div>;
+  }
+
+  const resumoSelecionado = resumos.find(r => r.id === resumoAberto);
+  if (resumoSelecionado) {
+    const temaSel = ESPECIALIDADES.find(t => t.id === resumoSelecionado.tema);
+    const secoesResumo = [
+      ['Resumo', resumoSelecionado.conteudo],
+      ['Pontos-chave', resumoSelecionado.pontosChave],
+      ['Dica de prova / pegadinhas', resumoSelecionado.condutaProva],
+      ['Observações pessoais', resumoSelecionado.observacoes]
+    ].filter(([,txt]) => plainText(txt || '').trim());
+    return <div className="lumen-fade-in">
+      <Button C={C} variant="ghost" size="sm" icon={I.ArrowL} onClick={() => setResumoAberto(null)} style={{ marginBottom: 16 }}>Voltar aos resumos</Button>
+      <div className="lumen-grid-resp" style={{ display:'grid', gridTemplateColumns:'260px minmax(0, 1fr)', gap:18, alignItems:'start' }}>
+        <Card C={C} style={{ position:'sticky', top:80 }}>
+          <div style={{ fontSize:11, color:C.textSoft, fontWeight:800, letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:10 }}>Tópicos</div>
+          {secoesResumo.map(([titulo]) => <a key={titulo} href={'#'+slugify(titulo)} style={{ display:'block', padding:'9px 10px', borderRadius:8, color:C.textMuted, textDecoration:'none', fontSize:13, fontWeight:700 }}>{titulo}</a>)}
+        </Card>
+        <Card C={C} style={{ padding:'clamp(22px, 4vw, 38px)' }}>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>{temaSel && <Badge C={C}>{temaSel.nome}</Badge>}{resumoSelecionado.subtema && <Badge C={C} color="soft">{resumoSelecionado.subtema}</Badge>}</div>
+          <h2 className="lumen-serif" style={{ fontSize:'clamp(26px,4vw,38px)', margin:'0 0 22px', lineHeight:1.15, color:C.text }}>{resumoSelecionado.titulo}</h2>
+          {secoesResumo.map(([titulo, txt]) => <section id={slugify(titulo)} key={titulo} style={{ marginBottom:24, scrollMarginTop:90 }}>
+            <h3 style={{ fontSize:18, margin:'0 0 10px', padding:'10px 12px', borderRadius:10, color:C.accent, background:C.accentSoft, display:'inline-block' }}>{titulo}</h3>
+            <HtmlText html={txt} C={C} style={{ fontSize:15.5, lineHeight:1.8 }} />
+          </section>)}
+        </Card>
+      </div>
+    </div>;
+  }
 
   const salvar = () => {
     if (!form.titulo.trim()) return;
@@ -2323,8 +2386,8 @@ function Artigos({ artigos, setArtigos, C }) {
         <select value={filtroTema} onChange={e => setFiltroTema(e.target.value)} style={{ ...inputStyle(C), maxWidth: 240, padding: '8px 12px' }}><option value="todos">Todas as especialidades</option>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select>
         <select value={filtroAno} onChange={e => setFiltroAno(e.target.value)} style={{ ...inputStyle(C), maxWidth: 180, padding: '8px 12px' }}><option value="todos">Todos os anos</option>{anos.map(a => <option key={a} value={a}>{a}</option>)}</select>
       </div>
-      {showForm && <Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Novo'} artigo/guideline</h3><FormInput C={C} label="Título" value={form.titulo} onChange={v => setForm({...form, titulo: v})} /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 10 }}><div><FormLabel C={C}>Especialidade</FormLabel><select value={form.tema} onChange={e => setForm({...form, tema: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><FormInput C={C} label="Fonte" value={form.fonte} onChange={v => setForm({...form, fonte: v})} /><FormInput C={C} label="Ano" type="number" value={form.ano} onChange={v => setForm({...form, ano: parseInt(v) || ''})} /><FormInput C={C} label="Link" value={form.link} onChange={v => setForm({...form, link: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Resumo estruturado</FormLabel><textarea value={form.resumo} onChange={e => setForm({...form, resumo: e.target.value})} style={{ ...inputStyle(C), minHeight: 80 }} /><FormLabel C={C} style={{ marginTop: 12 }}>Principais recomendações</FormLabel><textarea value={form.recomendacoes} onChange={e => setForm({...form, recomendacoes: e.target.value})} style={{ ...inputStyle(C), minHeight: 80 }} /><FormLabel C={C} style={{ marginTop: 12 }}>Pontos práticos</FormLabel><textarea value={form.praticos} onChange={e => setForm({...form, praticos: e.target.value})} style={{ ...inputStyle(C), minHeight: 80 }} /><FormLabel C={C} style={{ marginTop: 12 }}>Condutas que mudam prática</FormLabel><textarea value={form.mudaPratica} onChange={e => setForm({...form, mudaPratica: e.target.value})} style={{ ...inputStyle(C), minHeight: 60 }} /><FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><textarea value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} style={{ ...inputStyle(C), minHeight: 60 }} /><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div></Card>}
-      {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.BookMark size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum item com esses filtros.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>{filtrados.map(a => { const tema = ESPECIALIDADES.find(t => t.id === a.tema); return <Card key={a.id} C={C} hover><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<div style={{ fontSize: 12, color: C.textSoft }}>{a.ano}</div></div><h4 className="lumen-serif" style={{ fontSize: 16, margin: '4px 0 6px', fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{a.titulo}</h4><div style={{ fontSize: 12, color: C.textSoft, marginBottom: 10 }}>{a.fonte}</div>{a.resumo && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.resumo}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end', alignItems: 'center' }}>{a.link && <a href={a.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.accent, fontWeight: 600, marginRight: 'auto' }}>Ver fonte ↗</a>}<button onClick={() => { setForm(a); setEditing(a.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Edit size={13} /></button><button onClick={() => { if (confirm('Deseja realmente excluir este artigo/guideline?')) setArtigos(artigos.filter(x => x.id !== a.id)); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Trash size={13} /></button></div></Card>; })}</div>}
+      {showForm && <Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Novo'} artigo/guideline</h3><FormInput C={C} label="Título" value={form.titulo} onChange={v => setForm({...form, titulo: v})} /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 10 }}><div><FormLabel C={C}>Especialidade</FormLabel><select value={form.tema} onChange={e => setForm({...form, tema: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><FormInput C={C} label="Fonte" value={form.fonte} onChange={v => setForm({...form, fonte: v})} /><FormInput C={C} label="Ano" type="number" value={form.ano} onChange={v => setForm({...form, ano: parseInt(v) || ''})} /><FormInput C={C} label="Link" value={form.link} onChange={v => setForm({...form, link: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Resumo estruturado</FormLabel><RichTextEditor C={C} value={form.resumo} onChange={v => setForm({...form, resumo: v})} minHeight={90} /><FormLabel C={C} style={{ marginTop: 12 }}>Principais recomendações</FormLabel><RichTextEditor C={C} value={form.recomendacoes} onChange={v => setForm({...form, recomendacoes: v})} minHeight={90} /><FormLabel C={C} style={{ marginTop: 12 }}>Pontos práticos</FormLabel><RichTextEditor C={C} value={form.praticos} onChange={v => setForm({...form, praticos: v})} minHeight={90} /><FormLabel C={C} style={{ marginTop: 12 }}>Condutas que mudam prática</FormLabel><RichTextEditor C={C} value={form.mudaPratica} onChange={v => setForm({...form, mudaPratica: v})} minHeight={70} /><FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><RichTextEditor C={C} value={form.observacoes} onChange={v => setForm({...form, observacoes: v})} minHeight={70} /><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div></Card>}
+      {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.BookMark size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum item com esses filtros.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>{filtrados.map(a => { const tema = ESPECIALIDADES.find(t => t.id === a.tema); return <Card key={a.id} C={C} hover onClick={() => setArtigoAberto(a.id)}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<div style={{ fontSize: 12, color: C.textSoft }}>{a.ano}</div></div><h4 className="lumen-serif" style={{ fontSize: 16, margin: '4px 0 6px', fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{a.titulo}</h4><div style={{ fontSize: 12, color: C.textSoft, marginBottom: 10 }}>{a.fonte}</div>{a.resumo && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{plainText(a.resumo)}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end', alignItems: 'center' }}>{a.link && <a href={a.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.accent, fontWeight: 600, marginRight: 'auto' }}>Ver fonte ↗</a>}<button onClick={(e) => { e.stopPropagation(); setForm(a); setEditing(a.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Edit size={13} /></button><button onClick={(e) => { e.stopPropagation(); if (confirm('Deseja realmente excluir este artigo/guideline?')) setArtigos(artigos.filter(x => x.id !== a.id)); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Trash size={13} /></button></div></Card>; })}</div>}
     </>}
 
     {aba === 'resumos' && <>
@@ -2341,67 +2404,104 @@ function Artigos({ artigos, setArtigos, C }) {
           <div><FormLabel C={C}>Especialidade</FormLabel><select value={resumoForm.tema} onChange={e => setResumoForm({...resumoForm, tema: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div>
           <div><FormLabel C={C}>Subtema</FormLabel><input list="subtemas-resumos" value={resumoForm.subtema} onChange={e => setResumoForm({...resumoForm, subtema: e.target.value})} placeholder="Ex.: Hipercalcemia, Sepse, ICFEp..." style={inputStyle(C)} /><datalist id="subtemas-resumos">{[...new Set(resumos.map(r => r.subtema).filter(Boolean))].sort().map(s => <option key={s} value={s} />)}</datalist></div>
         </div>
-        <FormLabel C={C} style={{ marginTop: 12 }}>Resumo</FormLabel><textarea value={resumoForm.conteudo} onChange={e => setResumoForm({...resumoForm, conteudo: e.target.value})} style={{ ...inputStyle(C), minHeight: 120 }} />
-        <FormLabel C={C} style={{ marginTop: 12 }}>Pontos-chave</FormLabel><textarea value={resumoForm.pontosChave} onChange={e => setResumoForm({...resumoForm, pontosChave: e.target.value})} style={{ ...inputStyle(C), minHeight: 80 }} />
-        <FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova / pegadinhas</FormLabel><textarea value={resumoForm.condutaProva} onChange={e => setResumoForm({...resumoForm, condutaProva: e.target.value})} style={{ ...inputStyle(C), minHeight: 70 }} />
-        <FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><textarea value={resumoForm.observacoes} onChange={e => setResumoForm({...resumoForm, observacoes: e.target.value})} style={{ ...inputStyle(C), minHeight: 60 }} />
+        <FormLabel C={C} style={{ marginTop: 12 }}>Resumo</FormLabel><RichTextEditor C={C} value={resumoForm.conteudo} onChange={v => setResumoForm({...resumoForm, conteudo: v})} minHeight={130} />
+        <FormLabel C={C} style={{ marginTop: 12 }}>Pontos-chave</FormLabel><RichTextEditor C={C} value={resumoForm.pontosChave} onChange={v => setResumoForm({...resumoForm, pontosChave: v})} minHeight={90} />
+        <FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova / pegadinhas</FormLabel><RichTextEditor C={C} value={resumoForm.condutaProva} onChange={v => setResumoForm({...resumoForm, condutaProva: v})} minHeight={80} />
+        <FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><RichTextEditor C={C} value={resumoForm.observacoes} onChange={v => setResumoForm({...resumoForm, observacoes: v})} minHeight={70} />
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvarResumo}>Salvar resumo</Button><Button C={C} variant="ghost" onClick={() => { setShowResumoForm(false); setEditingResumo(null); }}>Cancelar</Button></div>
       </Card>}
 
-      {resumosFiltrados.length === 0 && !showResumoForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.File size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum resumo cadastrado. Clique em “Novo resumo”.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>{resumosFiltrados.map(r => { const tema = ESPECIALIDADES.find(t => t.id === r.tema); return <Card key={r.id} C={C} hover><div style={{ display: 'flex', gap: 6, justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{tema && <Badge C={C}>{tema.nome}</Badge>}{r.subtema && <Badge C={C} color="soft">{r.subtema}</Badge>}</div></div><h4 className="lumen-serif" style={{ fontSize: 17, margin: '4px 0 8px', fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{r.titulo}</h4>{r.conteudo && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 8 }}>{r.conteudo}</div>}{r.condutaProva && <div style={{ padding: 10, borderRadius: 8, background: C.accentSoft, color: C.accent, fontSize: 12.5, lineHeight: 1.45, marginTop: 8 }}><strong>Dica de prova:</strong> {r.condutaProva}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={() => { setResumoForm(r); setEditingResumo(r.id); setShowResumoForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar resumo"><I.Edit size={13} /></button><button onClick={() => excluirResumo(r.id)} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir resumo"><I.Trash size={13} /></button></div></Card>; })}</div>}
+      {resumosFiltrados.length === 0 && !showResumoForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.File size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum resumo cadastrado. Clique em “Novo resumo”.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>{resumosFiltrados.map(r => { const tema = ESPECIALIDADES.find(t => t.id === r.tema); return <Card key={r.id} C={C} hover onClick={() => setResumoAberto(r.id)}><div style={{ display: 'flex', gap: 6, justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{tema && <Badge C={C}>{tema.nome}</Badge>}{r.subtema && <Badge C={C} color="soft">{r.subtema}</Badge>}</div></div><h4 className="lumen-serif" style={{ fontSize: 17, margin: '4px 0 8px', fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{r.titulo}</h4>{r.conteudo && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 8 }}>{plainText(r.conteudo)}</div>}{r.condutaProva && <div style={{ padding: 10, borderRadius: 8, background: C.accentSoft, color: C.accent, fontSize: 12.5, lineHeight: 1.45, marginTop: 8 }}><strong>Dica de prova:</strong> {plainText(r.condutaProva)}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={(e) => { e.stopPropagation(); setResumoForm(r); setEditingResumo(r.id); setShowResumoForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar resumo"><I.Edit size={13} /></button><button onClick={(e) => { e.stopPropagation(); excluirResumo(r.id); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir resumo"><I.Trash size={13} /></button></div></Card>; })}</div>}
     </>}
   </div>;
 }
 
 
 // ============= CALCULADORAS & ESCORES =============
+function InterpretationTableEditor({ C, table, onChange }) {
+  const t = table || { columns: ['Classificação', 'Valor / intervalo'], rows: [] };
+  const cols = t.columns || ['Classificação', 'Valor / intervalo'];
+  const rows = t.rows || [];
+  const setCell = (ri, ci, val) => onChange({ ...t, rows: rows.map((r,i)=> i===ri ? cols.map((_,c)=> c===ci ? val : (r?.[c]||'')) : r) });
+  const addRow = () => onChange({ ...t, rows: [...rows, cols.map(()=> '')] });
+  const removeRow = (ri) => onChange({ ...t, rows: rows.filter((_,i)=>i!==ri) });
+  return <div style={{ border: `1px solid ${C.borderSoft}`, borderRadius: 10, overflowX: 'auto' }} className="lumen-scroll">
+    <table style={{ width:'100%', minWidth:420, borderCollapse:'collapse' }}>
+      <thead><tr>{cols.map((c,ci)=><th key={ci} style={{padding:8, borderBottom:`1px solid ${C.borderSoft}`, textAlign:'left'}}><input value={c} onChange={e=>onChange({...t, columns: cols.map((x,i)=>i===ci?e.target.value:x)})} style={{...inputStyle(C), padding:'6px 8px', fontWeight:700}} /></th>)}<th style={{width:42}}></th></tr></thead>
+      <tbody>{rows.map((r,ri)=><tr key={ri}>{cols.map((_,ci)=><td key={ci} style={{padding:6, borderBottom:`1px solid ${C.borderSoft}`}}><input value={r?.[ci]||''} onChange={e=>setCell(ri,ci,e.target.value)} style={{...inputStyle(C), padding:'7px 8px'}} /></td>)}<td style={{padding:6, borderBottom:`1px solid ${C.borderSoft}`}}><button onClick={()=>removeRow(ri)} style={{color:C.error, padding:4}}><I.Trash size={13}/></button></td></tr>)}</tbody>
+    </table>
+    <div style={{padding:8}}><Button C={C} size="sm" variant="secondary" onClick={addRow}>Adicionar linha</Button></div>
+  </div>;
+}
+
 function CalculadorasEscores({ calculadoras, setCalculadoras, C }) {
-  const itemVazio = () => ({ id: 'calc-' + Date.now(), nome: '', especialidade: ESPECIALIDADES[0]?.id || 'outros', subtema: '', tipo: 'Calculadora', formula: '', interpretacao: '', observacoes: '' });
+  const itemVazio = () => ({
+    id: 'calc-' + Date.now(), nome: '', especialidade: ESPECIALIDADES[0]?.id || 'outros', subtema: '', tipo: 'Calculadora',
+    formula: '', formulaExecutavel: '', variaveis: '', interpretacao: '', observacoes: '',
+    tabelaEscore: { columns: ['Pergunta', 'Resposta', 'Pontuação'], rows: [] },
+    tabelaInterpretacao: { columns: ['Classificação', 'Valor / intervalo'], rows: [] }
+  });
+  const [aba, setAba] = useState('conversoes');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(itemVazio());
   const [filtroTema, setFiltroTema] = useState('todos');
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroSubtema, setFiltroSubtema] = useState('todos');
-
   const subtemas = useMemo(() => [...new Set((calculadoras || []).map(c => c.subtema).filter(Boolean))].sort(), [calculadoras]);
+  const tipoDaAba = aba === 'escores' ? 'Escore' : aba === 'calculadoras' ? 'Calculadora' : null;
   const filtradas = useMemo(() => (calculadoras || []).filter(c => {
+    if (tipoDaAba && c.tipo !== tipoDaAba) return false;
     if (filtroTema !== 'todos' && c.especialidade !== filtroTema) return false;
     if (filtroTipo !== 'todos' && c.tipo !== filtroTipo) return false;
     if (filtroSubtema !== 'todos' && c.subtema !== filtroSubtema) return false;
     return true;
-  }), [calculadoras, filtroTema, filtroTipo, filtroSubtema]);
-
+  }), [calculadoras, filtroTema, filtroTipo, filtroSubtema, tipoDaAba]);
   const salvar = () => {
     if (!form.nome.trim()) return alert('Preencha o nome da calculadora/escore.');
-    const item = { ...form, atualizadoEm: new Date().toISOString() };
+    const item = { ...itemVazio(), ...form, atualizadoEm: new Date().toISOString() };
     if (editing) setCalculadoras(calculadoras.map(c => c.id === editing ? item : c));
     else setCalculadoras([item, ...(calculadoras || [])]);
     setShowForm(false); setEditing(null); setForm(itemVazio());
   };
   const excluir = (id) => { if (confirm('Deseja realmente excluir esta calculadora/escore?')) setCalculadoras((calculadoras || []).filter(c => c.id !== id)); };
+  const Aba = ({id, children}) => <button onClick={()=>setAba(id)} style={{ padding:'10px 14px', borderRadius:999, fontSize:13, fontWeight:800, background: aba===id ? C.accent : C.card, color: aba===id ? '#fff' : C.textMuted, border:`1px solid ${aba===id ? C.accent : C.borderSoft}` }}>{children}</button>;
 
   return <div className="lumen-fade-in">
-    <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-      <Button C={C} icon={I.Plus} onClick={() => { setShowForm(true); setEditing(null); setForm(itemVazio()); }}>Nova calculadora/escore</Button>
-      <select value={filtroTema} onChange={e => { setFiltroTema(e.target.value); setFiltroSubtema('todos'); }} style={{ ...inputStyle(C), maxWidth: 240, padding: '8px 12px' }}><option value="todos">Todas as especialidades</option>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select>
-      <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ ...inputStyle(C), maxWidth: 190, padding: '8px 12px' }}><option value="todos">Todos os tipos</option><option>Calculadora</option><option>Escore</option><option>Critério diagnóstico</option><option>Classificação</option></select>
-      <select value={filtroSubtema} onChange={e => setFiltroSubtema(e.target.value)} style={{ ...inputStyle(C), maxWidth: 220, padding: '8px 12px' }}><option value="todos">Todos os subtemas</option>{subtemas.map(s => <option key={s} value={s}>{s}</option>)}</select>
-    </div>
-    {showForm && <Card C={C} style={{ marginBottom: 16 }}>
-      <h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Nova'} calculadora/escore</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        <FormInput C={C} label="Nome" value={form.nome} onChange={v => setForm({...form, nome: v})} />
-        <div><FormLabel C={C}>Especialidade</FormLabel><select value={form.especialidade} onChange={e => setForm({...form, especialidade: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div>
-        <div><FormLabel C={C}>Tipo</FormLabel><select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} style={inputStyle(C)}><option>Calculadora</option><option>Escore</option><option>Critério diagnóstico</option><option>Classificação</option></select></div>
-        <div><FormLabel C={C}>Subtema</FormLabel><input list="subtemas-calculadoras" value={form.subtema} onChange={e => setForm({...form, subtema: e.target.value})} placeholder="Ex.: Sepse, DRC, TEP..." style={inputStyle(C)} /><datalist id="subtemas-calculadoras">{subtemas.map(s => <option key={s} value={s} />)}</datalist></div>
+    <Card C={C} style={{ marginBottom: 16, padding: 14 }}>
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+        <Aba id="conversoes">Conversões</Aba><Aba id="equivalencias">Equivalências</Aba><Aba id="calculadoras">Calculadoras</Aba><Aba id="escores">Escores</Aba>
       </div>
-      <FormLabel C={C} style={{ marginTop: 12 }}>Fórmula / variáveis / passo a passo</FormLabel><textarea value={form.formula} onChange={e => setForm({...form, formula: e.target.value})} style={{ ...inputStyle(C), minHeight: 90 }} placeholder="Ex.: Critérios, pontos por variável, cálculo..." />
-      <FormLabel C={C} style={{ marginTop: 12 }}>Interpretação do resultado</FormLabel><textarea value={form.interpretacao} onChange={e => setForm({...form, interpretacao: e.target.value})} style={{ ...inputStyle(C), minHeight: 80 }} placeholder="Ex.: baixo/intermediário/alto risco; conduta sugerida..." />
-      <FormLabel C={C} style={{ marginTop: 12 }}>Observações / dica de prova</FormLabel><textarea value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} style={{ ...inputStyle(C), minHeight: 70 }} />
-      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div>
-    </Card>}
-    {filtradas.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Target size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhuma calculadora/escore cadastrado. Clique em “Nova calculadora/escore”.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: 14 }}>{filtradas.map(c => { const tema = ESPECIALIDADES.find(t => t.id === c.especialidade); return <Card key={c.id} C={C} hover><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<Badge C={C} color="soft">{c.tipo}</Badge>{c.subtema && <Badge C={C} color="soft">{c.subtema}</Badge>}</div><h4 className="lumen-serif" style={{ fontSize: 18, margin: '4px 0 8px', fontWeight: 500, color: C.text }}>{c.nome}</h4>{c.formula && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 8 }}><strong>Como calcular:</strong><br />{c.formula}</div>}{c.interpretacao && <div style={{ padding: 10, borderRadius: 8, background: C.bg, border: `1px solid ${C.borderSoft}`, fontSize: 13, lineHeight: 1.5, color: C.textMuted, whiteSpace: 'pre-wrap' }}>{c.interpretacao}</div>}{c.observacoes && <div style={{ marginTop: 8, fontSize: 12.5, color: C.accent, lineHeight: 1.45 }}><strong>Dica:</strong> {c.observacoes}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={() => { setForm(c); setEditing(c.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar"><I.Edit size={13} /></button><button onClick={() => excluir(c.id)} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir"><I.Trash size={13} /></button></div></Card>; })}</div>}
+    </Card>
+
+    {aba === 'conversoes' && <ConversoresClinicos C={C} />}
+    {aba === 'equivalencias' && <EquivalenciasClinicas C={C} />}
+
+    {(aba === 'calculadoras' || aba === 'escores') && <>
+      <Card C={C} style={{ marginBottom: 16, background: C.bg }}>
+        <h3 className="lumen-serif" style={{fontSize:18, margin:'0 0 8px'}}>Como montar expressões matemáticas executáveis</h3>
+        <div style={{fontSize:13, color:C.textMuted, lineHeight:1.65}}>
+          Cadastre as variáveis separadas por vírgula, usando nomes simples sem espaço: <strong>peso, idade, creatinina</strong>. Na expressão, use esses mesmos nomes. Operadores aceitos: <strong>+</strong>, <strong>-</strong>, <strong>*</strong>, <strong>/</strong>, <strong>**</strong> para potência e parênteses. Exemplo: <strong>(140 - idade) * peso / (72 * creatinina)</strong>. Para sexo, prefira criar variável numérica, por exemplo <strong>fatorSexo</strong>, e preencher 0.85 quando necessário.
+        </div>
+      </Card>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Button C={C} icon={I.Plus} onClick={() => { setShowForm(true); setEditing(null); setForm({...itemVazio(), tipo: aba === 'escores' ? 'Escore' : 'Calculadora'}); }}>{aba === 'escores' ? 'Novo escore' : 'Nova calculadora'}</Button>
+        <select value={filtroTema} onChange={e => { setFiltroTema(e.target.value); setFiltroSubtema('todos'); }} style={{ ...inputStyle(C), maxWidth: 240, padding: '8px 12px' }}><option value="todos">Todas as especialidades</option>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select>
+        <select value={filtroSubtema} onChange={e => setFiltroSubtema(e.target.value)} style={{ ...inputStyle(C), maxWidth: 220, padding: '8px 12px' }}><option value="todos">Todos os subtemas</option>{subtemas.map(s => <option key={s} value={s}>{s}</option>)}</select>
+      </div>
+      {showForm && <Card C={C} style={{ marginBottom: 16 }}>
+        <h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Novo'} {form.tipo?.toLowerCase()}</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}><FormInput C={C} label="Nome" value={form.nome} onChange={v => setForm({...form, nome: v})} /><div><FormLabel C={C}>Especialidade</FormLabel><select value={form.especialidade} onChange={e => setForm({...form, especialidade: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><div><FormLabel C={C}>Tipo</FormLabel><select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} style={inputStyle(C)}><option>Calculadora</option><option>Escore</option><option>Critério diagnóstico</option><option>Classificação</option></select></div><div><FormLabel C={C}>Subtema</FormLabel><input list="subtemas-calculadoras" value={form.subtema} onChange={e => setForm({...form, subtema: e.target.value})} placeholder="Ex.: Sepse, DRC, TEP..." style={inputStyle(C)} /><datalist id="subtemas-calculadoras">{subtemas.map(s => <option key={s} value={s} />)}</datalist></div></div>
+        <FormLabel C={C} style={{ marginTop: 12 }}>Explicação / fórmula / passo a passo</FormLabel><RichTextEditor C={C} value={form.formula} onChange={v=>setForm({...form, formula:v})} minHeight={90} />
+        {form.tipo === 'Calculadora' && <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: C.bg, border: `1px solid ${C.borderSoft}` }}><h4 style={{ margin: '0 0 8px', fontSize: 14, color: C.text }}>Fórmula executável</h4><FormLabel C={C}>Variáveis separadas por vírgula</FormLabel><input value={form.variaveis || ''} onChange={e=>setForm({...form, variaveis:e.target.value})} placeholder="Ex.: idade, creatinina, peso, fatorSexo" style={inputStyle(C)} /><FormLabel C={C} style={{ marginTop: 8 }}>Expressão matemática</FormLabel><input value={form.formulaExecutavel || ''} onChange={e=>setForm({...form, formulaExecutavel:e.target.value})} placeholder="Ex.: (140 - idade) * peso * fatorSexo / (72 * creatinina)" style={inputStyle(C)} /></div>}
+        {form.tipo === 'Escore' && <><FormLabel C={C} style={{ marginTop: 12 }}>Tabela do escore</FormLabel><ScoreTableEditor C={C} table={form.tabelaEscore} onChange={t=>setForm({...form, tabelaEscore:t})} /></>}
+        <FormLabel C={C} style={{ marginTop: 12 }}>Interpretação do resultado</FormLabel><InterpretationTableEditor C={C} table={form.tabelaInterpretacao} onChange={t=>setForm({...form, tabelaInterpretacao:t})} />
+        <FormLabel C={C} style={{ marginTop: 12 }}>Texto complementar da interpretação</FormLabel><RichTextEditor C={C} value={form.interpretacao} onChange={v=>setForm({...form, interpretacao:v})} minHeight={70} />
+        <FormLabel C={C} style={{ marginTop: 12 }}>Observações / dica de prova</FormLabel><RichTextEditor C={C} value={form.observacoes} onChange={v=>setForm({...form, observacoes:v})} minHeight={70} />
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div>
+      </Card>}
+      {filtradas.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Target size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum item cadastrado nesta aba.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: 14 }}>{filtradas.map(c => { const tema = ESPECIALIDADES.find(t => t.id === c.especialidade); const table = c.tabelaEscore || {columns:['Pergunta','Resposta','Pontuação'], rows:[]}; const interpTable = c.tabelaInterpretacao || {columns:['Classificação','Valor / intervalo'], rows:[]}; return <Card key={c.id} C={C} hover><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<Badge C={C} color="soft">{c.tipo}</Badge>{c.subtema && <Badge C={C} color="soft">{c.subtema}</Badge>}</div><h4 className="lumen-serif" style={{ fontSize: 18, margin: '4px 0 8px', fontWeight: 500, color: C.text }}>{c.nome}</h4>{c.formula && <><div style={{ fontSize: 11, color: C.textSoft, fontWeight: 700 }}>Como calcular</div><HtmlText html={c.formula} C={C} style={{ fontSize: 13, color: C.textMuted }} /></>}<ExecutableCalculator item={c} C={C}/>{table.rows?.length ? <div style={{ marginTop: 10, overflowX:'auto' }}><table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}><thead><tr>{table.columns.map(col=><th key={col} style={{ textAlign:'left', padding:6, borderBottom:`1px solid ${C.borderSoft}` }}>{col}</th>)}</tr></thead><tbody>{table.rows.map((r,i)=><tr key={i}>{table.columns.map((_,ci)=><td key={ci} style={{ padding:6, borderBottom:`1px solid ${C.borderSoft}` }}>{r?.[ci]}</td>)}</tr>)}</tbody></table></div> : null}{interpTable.rows?.length ? <div style={{ marginTop: 10, overflowX:'auto' }}><table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}><tbody>{interpTable.rows.map((r,i)=><tr key={i}><td style={{ padding:7, borderBottom:`1px solid ${C.borderSoft}`, fontWeight:700 }}>{r?.[0]}</td><td style={{ padding:7, borderBottom:`1px solid ${C.borderSoft}` }}>{r?.[1]}</td></tr>)}</tbody></table></div> : null}{c.interpretacao && <div style={{ padding: 10, borderRadius: 8, background: C.bg, border: `1px solid ${C.borderSoft}`, fontSize: 13, marginTop:8 }}><HtmlText html={c.interpretacao} C={C} /></div>}{c.observacoes && <div style={{ marginTop: 8, fontSize: 12.5, color: C.accent }}><strong>Dica:</strong> <HtmlText html={c.observacoes} C={C} style={{display:'inline'}} /></div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={() => { setForm({ ...itemVazio(), ...c, tabelaEscore: c.tabelaEscore || {columns:['Pergunta','Resposta','Pontuação'], rows:[]}, tabelaInterpretacao: c.tabelaInterpretacao || {columns:['Classificação','Valor / intervalo'], rows:[]} }); setEditing(c.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar"><I.Edit size={13} /></button><button onClick={() => excluir(c.id)} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir"><I.Trash size={13} /></button></div></Card>; })}</div>}
+    </>}
   </div>;
 }
 
@@ -2524,10 +2624,10 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
         <FormInput C={C} label="Classe" value={form.classe} onChange={v => setForm({...form, classe: v})} />
         <FormInput C={C} label="Nome do antibiótico" value={form.antibiotico} onChange={v => setForm({...form, antibiotico: v})} />
       </div>
-      <FormLabel C={C} style={{ marginTop: 12 }}>Cobertura / espectro</FormLabel><textarea value={form.cobertura} onChange={e => setForm({...form, cobertura: e.target.value})} style={{ ...inputStyle(C), minHeight: 90 }} placeholder="Ex.: Gram positivos, Gram negativos, anaeróbios, Pseudomonas, MRSA..." />
-      <FormLabel C={C} style={{ marginTop: 12 }}>Resistências / não cobre</FormLabel><textarea value={form.resistencia} onChange={e => setForm({...form, resistencia: e.target.value})} style={{ ...inputStyle(C), minHeight: 70 }} placeholder="Ex.: não cobre MRSA, ESBL, KPC; resistência intrínseca..." />
-      <FormLabel C={C} style={{ marginTop: 12 }}>Mecanismo de ação</FormLabel><textarea value={form.mecanismoAcao || form.doseHabitual || ''} onChange={e => setForm({...form, mecanismoAcao: e.target.value})} style={{ ...inputStyle(C), minHeight: 70 }} placeholder="Ex.: inibe síntese de parede celular; liga-se à subunidade 50S; inibe DNA girase/topoisomerase..." />
-      <FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><textarea value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} style={{ ...inputStyle(C), minHeight: 60 }} />
+      <FormLabel C={C} style={{ marginTop: 12 }}>Cobertura / espectro</FormLabel><RichTextEditor C={C} value={form.cobertura} onChange={v => setForm({...form, cobertura: v})} minHeight={90} placeholder="Ex.: Gram positivos, Gram negativos, anaeróbios, Pseudomonas, MRSA..." />
+      <FormLabel C={C} style={{ marginTop: 12 }}>Resistências / não cobre</FormLabel><RichTextEditor C={C} value={form.resistencia} onChange={v => setForm({...form, resistencia: v})} minHeight={80} placeholder="Ex.: não cobre MRSA, ESBL, KPC; resistência intrínseca..." />
+      <FormLabel C={C} style={{ marginTop: 12 }}>Mecanismo de ação</FormLabel><RichTextEditor C={C} value={form.mecanismoAcao || form.doseHabitual || ''} onChange={v => setForm({...form, mecanismoAcao: v})} minHeight={80} placeholder="Ex.: inibe síntese de parede celular; liga-se à subunidade 50S; inibe DNA girase/topoisomerase..." />
+      <FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><RichTextEditor C={C} value={form.observacoes} onChange={v => setForm({...form, observacoes: v})} minHeight={70} />
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div>
     </Card>}
     {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Activity size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum registro cadastrado. Clique em “Novo registro”.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>{filtrados.map(a => <Card key={a.id} C={C} hover><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}><Badge C={C}>{a.tipo}</Badge>{a.classe && <Badge C={C} color="soft">{a.classe}</Badge>}</div><h4 className="lumen-serif" style={{ fontSize: 18, margin: '4px 0 8px', fontWeight: 500, color: C.text }}>{a.antibiotico || a.agente || a.classe}</h4>{a.agente && <div style={{ fontSize: 12.5, color: C.textSoft, marginBottom: 6 }}><strong>Agente:</strong> {a.agente}</div>}{a.cobertura && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}><strong>Cobertura:</strong><br />{a.cobertura}</div>}{a.resistencia && <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: C.error + '12', color: C.error, fontSize: 12.5, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}><strong>Não cobre / atenção:</strong><br />{a.resistencia}</div>}{(a.mecanismoAcao || a.doseHabitual) && <div style={{ marginTop: 8, fontSize: 12.5, color: C.textMuted, whiteSpace: 'pre-wrap' }}><strong>Mecanismo de ação:</strong> {a.mecanismoAcao || a.doseHabitual}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={() => { setForm({ ...a, mecanismoAcao: a.mecanismoAcao || a.doseHabitual || '' }); setEditing(a.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar"><I.Edit size={13} /></button><button onClick={() => excluir(a.id)} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir"><I.Trash size={13} /></button></div></Card>)}</div>}
@@ -2591,7 +2691,7 @@ function Medicamentos({ medicamentos, setMedicamentos, C }) {
           <select value={filtroDoenca} onChange={e => setFiltroDoenca(e.target.value)} style={{ ...inputStyle(C), maxWidth: 260, padding: '8px 12px' }}><option value="todas">Doenças e medicamentos mais utilizados</option><option value="__sem_doenca__">Medicamentos mais utilizados</option>{doencas.map(d => <option key={d}>{d}</option>)}</select>
         </div>
 
-        {showForm && <Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Nova'} medicação/prescrição</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}><FormInput C={C} label="Nome da medicação/prescrição" value={form.nome} onChange={v => setForm({...form, nome: v})} /><FormInput C={C} label="Classe" value={form.classe} onChange={v => setForm({...form, classe: v})} /><div><FormLabel C={C}>Categoria</FormLabel><select value={form.categoria || ''} onChange={e => setForm({...form, categoria: e.target.value})} style={inputStyle(C)}><option value="">Sem categoria</option>{CATEGORIAS_MED.map(c => <option key={c}>{c}</option>)}</select></div><div><FormLabel C={C}>Especialidade</FormLabel><select value={form.especialidade || 'infecto'} onChange={e => setForm({...form, especialidade: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><FormInput C={C} label="Doença/condição (opcional; deixe vazio para medicamentos mais utilizados)" value={form.doenca || ''} onChange={v => setForm({...form, doenca: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Prescrição / medicamentos mais utilizados</FormLabel><textarea value={form.prescricao || ''} onChange={e => setForm({...form, prescricao: e.target.value})} placeholder="Ex.: Pneumonia comunitária: ceftriaxona + azitromicina..." style={{ ...inputStyle(C), minHeight: 100 }} /><FormLabel C={C} style={{ marginTop: 12 }}>Indicação</FormLabel><textarea value={form.indicacao} onChange={e => setForm({...form, indicacao: e.target.value})} style={{ ...inputStyle(C), minHeight: 50 }} /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12 }}><FormInput C={C} label="Dose usual" value={form.dose} onChange={v => setForm({...form, dose: v})} /><FormInput C={C} label="Dose máxima" value={form.doseMax} onChange={v => setForm({...form, doseMax: v})} /><FormInput C={C} label="Ajuste renal" value={form.ajusteRenal} onChange={v => setForm({...form, ajusteRenal: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Diluição</FormLabel><textarea value={form.diluicao} onChange={e => setForm({...form, diluicao: e.target.value})} style={{ ...inputStyle(C), minHeight: 50 }} /><FormLabel C={C} style={{ marginTop: 12 }}>Velocidade de infusão</FormLabel><textarea value={form.velocidade} onChange={e => setForm({...form, velocidade: e.target.value})} style={{ ...inputStyle(C), minHeight: 40 }} /><FormLabel C={C} style={{ marginTop: 12 }}>Cuidados e contraindicações</FormLabel><textarea value={form.cuidados} onChange={e => setForm({...form, cuidados: e.target.value})} style={{ ...inputStyle(C), minHeight: 60 }} /><FormLabel C={C} style={{ marginTop: 12 }}>Observações</FormLabel><textarea value={form.obs} onChange={e => setForm({...form, obs: e.target.value})} style={{ ...inputStyle(C), minHeight: 50 }} /><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div></Card>}
+        {showForm && <Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Nova'} medicação/prescrição</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}><FormInput C={C} label="Nome da medicação/prescrição" value={form.nome} onChange={v => setForm({...form, nome: v})} /><FormInput C={C} label="Classe" value={form.classe} onChange={v => setForm({...form, classe: v})} /><div><FormLabel C={C}>Categoria</FormLabel><select value={form.categoria || ''} onChange={e => setForm({...form, categoria: e.target.value})} style={inputStyle(C)}><option value="">Sem categoria</option>{CATEGORIAS_MED.map(c => <option key={c}>{c}</option>)}</select></div><div><FormLabel C={C}>Especialidade</FormLabel><select value={form.especialidade || 'infecto'} onChange={e => setForm({...form, especialidade: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><FormInput C={C} label="Doença/condição (opcional; deixe vazio para medicamentos mais utilizados)" value={form.doenca || ''} onChange={v => setForm({...form, doenca: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Prescrição / medicamentos mais utilizados</FormLabel><RichTextEditor C={C} value={form.prescricao || ''} onChange={v => setForm({...form, prescricao: v})} minHeight={110} placeholder="Ex.: Pneumonia comunitária: ceftriaxona + azitromicina..." /><FormLabel C={C} style={{ marginTop: 12 }}>Indicação</FormLabel><RichTextEditor C={C} value={form.indicacao} onChange={v => setForm({...form, indicacao: v})} minHeight={60} /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12 }}><FormInput C={C} label="Dose usual" value={form.dose} onChange={v => setForm({...form, dose: v})} /><FormInput C={C} label="Dose máxima" value={form.doseMax} onChange={v => setForm({...form, doseMax: v})} /><FormInput C={C} label="Ajuste renal" value={form.ajusteRenal} onChange={v => setForm({...form, ajusteRenal: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Diluição</FormLabel><RichTextEditor C={C} value={form.diluicao} onChange={v => setForm({...form, diluicao: v})} minHeight={60} /><FormLabel C={C} style={{ marginTop: 12 }}>Velocidade de infusão</FormLabel><RichTextEditor C={C} value={form.velocidade} onChange={v => setForm({...form, velocidade: v})} minHeight={55} /><FormLabel C={C} style={{ marginTop: 12 }}>Cuidados e contraindicações</FormLabel><RichTextEditor C={C} value={form.cuidados} onChange={v => setForm({...form, cuidados: v})} minHeight={70} /><FormLabel C={C} style={{ marginTop: 12 }}>Observações</FormLabel><RichTextEditor C={C} value={form.obs} onChange={v => setForm({...form, obs: v})} minHeight={60} /><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div></Card>}
         {filtrados.length === 0 ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Pill size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum medicamento/prescrição com esses filtros.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{filtrados.map(m => <MedCard key={m.id} m={m} C={C} onEdit={() => { setForm({...m, especialidade: m.especialidade || m.tema || 'infecto'}); setEditing(m.id); setShowForm(true); }} onDelete={() => { if (confirm('Deletar?')) setMedicamentos(medicamentos.filter(x => x.id !== m.id)); }} />)}</div>}
       </div>
 
@@ -2684,22 +2784,91 @@ function Fluxogramas({ fluxogramas, setFluxogramas, C }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filtroTema, setFiltroTema] = useState('todos');
-  const [form, setForm] = useState({ titulo: '', tema: 'cardio', texto: '', imagem: '', tags: [] });
+  const [form, setForm] = useState({ titulo: '', tema: 'cardio', link: '', tags: [] });
   const filtrados = fluxogramas.filter(f => filtroTema === 'todos' || f.tema === filtroTema);
   const salvar = () => {
     if (!form.titulo.trim()) return;
-    if (editing) setFluxogramas(fluxogramas.map(f => f.id === editing ? { ...form, id: editing } : f));
-    else setFluxogramas([{ ...form, id: 'fl-' + Date.now(), criadoEm: new Date().toISOString() }, ...fluxogramas]);
-    setShowForm(false); setEditing(null); setForm({ titulo: '', tema: 'cardio', texto: '', imagem: '', tags: [] });
+    const payload = { titulo: form.titulo, tema: form.tema, link: form.link || '', tags: form.tags || [] };
+    if (editing) setFluxogramas(fluxogramas.map(f => f.id === editing ? { ...payload, id: editing } : f));
+    else setFluxogramas([{ ...payload, id: 'fl-' + Date.now(), criadoEm: new Date().toISOString() }, ...fluxogramas]);
+    setShowForm(false); setEditing(null); setForm({ titulo: '', tema: 'cardio', link: '', tags: [] });
   };
-  const handleImage = (e) => { const file = e.target.files?.[0]; if (!file) return; if (file.size > 2 * 1024 * 1024) { alert('Imagem muito grande (máx 2MB).'); return; } const reader = new FileReader(); reader.onload = () => setForm({...form, imagem: reader.result}); reader.readAsDataURL(file); };
+  const abrirLink = (link) => { if (!link) return; window.open(link, '_blank', 'noopener,noreferrer'); };
   return <div className="lumen-fade-in">
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center', flexWrap: 'wrap', gap: 10 }}><p style={{ color: C.textMuted, fontSize: 14, margin: 0 }}>Seus próprios fluxogramas e algoritmos médicos.</p><Button C={C} icon={I.Plus} onClick={() => { setShowForm(true); setEditing(null); }}>Novo fluxograma</Button></div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+      <p style={{ color: C.textMuted, fontSize: 14, margin: 0 }}>Cadastro enxuto de fluxogramas: título, especialidade e link do Google Drive.</p>
+      <Button C={C} icon={I.Plus} onClick={() => { setShowForm(true); setEditing(null); setForm({ titulo:'', tema:'cardio', link:'', tags:[] }); }}>Novo fluxograma</Button>
+    </div>
     <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}><select value={filtroTema} onChange={e => setFiltroTema(e.target.value)} style={{ ...inputStyle(C), maxWidth: 260, padding: '8px 12px' }}><option value="todos">Todas as especialidades</option>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div>
-    {showForm && <Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Novo'} fluxograma</h3><FormInput C={C} label="Título" value={form.titulo} onChange={v => setForm({...form, titulo: v})} /><div style={{ marginTop: 12 }}><FormLabel C={C}>Especialidade</FormLabel><select value={form.tema} onChange={e => setForm({...form, tema: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><FormLabel C={C} style={{ marginTop: 12 }}>Imagem (opcional)</FormLabel><input type="file" accept="image/*" onChange={handleImage} style={{ fontSize: 13, color: C.textMuted }} />{form.imagem && <img src={form.imagem} alt="" style={{ maxWidth: '100%', maxHeight: 200, marginTop: 8, borderRadius: 8 }} />}<FormLabel C={C} style={{ marginTop: 12 }}>Texto explicativo</FormLabel><textarea value={form.texto} onChange={e => setForm({...form, texto: e.target.value})} style={{ ...inputStyle(C), minHeight: 120 }} /><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div></Card>}
-    {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.GitBranch size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum fluxograma com esse filtro.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>{filtrados.map(f => { const tema = ESPECIALIDADES.find(t => t.id === f.tema); return <Card key={f.id} C={C} hover style={{ padding: 0, overflow: 'hidden' }}>{f.imagem && <div style={{ height: 160, background: C.bg, overflow: 'hidden' }}><img src={f.imagem} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>}<div style={{ padding: 14 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<h4 className="lumen-serif" style={{ fontSize: 16, margin: '8px 0 6px', color: C.text }}>{f.titulo}</h4>{f.texto && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{f.texto}</div>}<div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={() => { setForm(f); setEditing(f.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Edit size={13} /></button><button onClick={() => { if (confirm('Deletar?')) setFluxogramas(fluxogramas.filter(x => x.id !== f.id)); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Trash size={13} /></button></div></div></Card>; })}</div>}
+    {showForm && <Card C={C} style={{ marginBottom: 16 }}>
+      <h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Novo'} fluxograma</h3>
+      <FormInput C={C} label="Título" value={form.titulo} onChange={v => setForm({...form, titulo: v})} />
+      <div style={{ marginTop: 12 }}><FormLabel C={C}>Especialidade</FormLabel><select value={form.tema} onChange={e => setForm({...form, tema: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div>
+      <FormInput C={C} label="Link do Google Drive" value={form.link || ''} onChange={v => setForm({...form, link: v})} />
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div>
+    </Card>}
+    {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.GitBranch size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum fluxograma com esse filtro.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>{filtrados.map(f => { const tema = ESPECIALIDADES.find(t => t.id === f.tema); return <Card key={f.id} C={C} hover style={{ padding: 16 }}><div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center' }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<span style={{ color:C.textSoft }}><I.GitBranch size={18}/></span></div><h4 className="lumen-serif" style={{ fontSize: 18, margin: '12px 0 10px', color: C.text }}>{f.titulo}</h4>{f.link ? <Button C={C} size="sm" icon={I.Play} onClick={() => abrirLink(f.link)}>Abrir no Google Drive</Button> : <div style={{ fontSize:13, color:C.textSoft }}>Sem link cadastrado.</div>}<div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={() => { setForm({ titulo:f.titulo || '', tema:f.tema || 'cardio', link:f.link || '', tags:f.tags || [] }); setEditing(f.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Edit size={13} /></button><button onClick={() => { if (confirm('Deletar?')) setFluxogramas(fluxogramas.filter(x => x.id !== f.id)); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Trash size={13} /></button></div></Card>; })}</div>}
   </div>;
 }
+
+
+function ConversoresClinicos({ C }) {
+  const [modo, setModo] = useState('mlParaMcgKgMin');
+  const [v, setV] = useState({ mlh:'', conc:'', peso:'', dose:'', mgh:'', mcgh:'' });
+  const n = x => Number(String(x||'').replace(',','.')) || 0;
+  let resultado = '';
+  if (modo === 'mlParaMcgKgMin') resultado = n(v.conc) && n(v.peso) ? ((n(v.mlh)*n(v.conc))/(n(v.peso)*60)).toFixed(3) + ' mcg/kg/min' : '';
+  if (modo === 'mcgKgMinParaMl') resultado = n(v.conc) ? ((n(v.dose)*n(v.peso)*60)/n(v.conc)).toFixed(2) + ' mL/h' : '';
+  if (modo === 'mgParaMcgHora') resultado = n(v.mgh) ? (n(v.mgh)*1000).toFixed(0) + ' mcg/h' : '';
+  if (modo === 'mcgParaMgHora') resultado = n(v.mcgh) ? (n(v.mcgh)/1000).toFixed(3) + ' mg/h' : '';
+  return <Card C={C} style={{ marginBottom:16 }}><h3 className="lumen-serif" style={{ fontSize:18, margin:'0 0 10px' }}>Conversões rápidas</h3>
+    <select value={modo} onChange={e=>setModo(e.target.value)} style={{...inputStyle(C), maxWidth:360, marginBottom:12}}><option value="mlParaMcgKgMin">mL/h → mcg/kg/min</option><option value="mcgKgMinParaMl">mcg/kg/min → mL/h</option><option value="mgParaMcgHora">mg/h → mcg/h</option><option value="mcgParaMgHora">mcg/h → mg/h</option></select>
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:10 }}>
+      {modo==='mlParaMcgKgMin' && <><FormInput C={C} label="mL/h" value={v.mlh} onChange={x=>setV({...v,mlh:x})}/><FormInput C={C} label="Concentração mcg/mL" value={v.conc} onChange={x=>setV({...v,conc:x})}/><FormInput C={C} label="Peso kg" value={v.peso} onChange={x=>setV({...v,peso:x})}/></>}
+      {modo==='mcgKgMinParaMl' && <><FormInput C={C} label="Dose mcg/kg/min" value={v.dose} onChange={x=>setV({...v,dose:x})}/><FormInput C={C} label="Peso kg" value={v.peso} onChange={x=>setV({...v,peso:x})}/><FormInput C={C} label="Concentração mcg/mL" value={v.conc} onChange={x=>setV({...v,conc:x})}/></>}
+      {modo==='mgParaMcgHora' && <FormInput C={C} label="mg/h" value={v.mgh} onChange={x=>setV({...v,mgh:x})}/>} {modo==='mcgParaMgHora' && <FormInput C={C} label="mcg/h" value={v.mcgh} onChange={x=>setV({...v,mcgh:x})}/>} </div>
+    <div style={{ marginTop:12, padding:12, borderRadius:10, background:C.accentSoft, color:C.accent, fontWeight:800 }}>Resultado: {resultado || 'preencha os campos'}</div>
+  </Card>;
+}
+function EquivalenciasClinicas({ C }) {
+  const [custom, setCustom] = useState(() => storage.get('lumen_equivalencias_custom', []));
+  const [form, setForm] = useState({ titulo:'', colunas:'Item, Equivalência, Observações', linhas:'' });
+  const [open, setOpen] = useState({ cort:false, opio:false, custom:{} });
+  const [dose, setDose] = useState('');
+  const [de, setDe] = useState('Prednisolona');
+  const [para, setPara] = useState('Betametasona');
+  useEffect(()=>storage.set('lumen_equivalencias_custom', custom), [custom]);
+  const cort = [
+    ['Betametasona',30,0,'L',0.75],['Cortisona',0.8,0.8,'C',25],['Dexametasona',30,0,'L',0.75],['Fludrocortisona',10,125,'I',0],['Hidrocortisona',1,1,'C',20],['Metilprednisolona',5,0.5,'I',4],['Prednisona',4,0.8,'I',5],['Prednisolona',4,0.8,'I',5],['Triancinolona',5,0,'I',4]
+  ];
+  const opio = [['Morfina VO','30 mg','referência'],['Morfina EV/SC','10 mg','aprox. 3:1 VO:parenteral'],['Oxicodona VO','20 mg','aprox.'],['Fentanil EV','100 mcg','aprox.'],['Codeína VO','200 mg','aprox.'],['Tramadol VO','300 mg','aprox.']];
+  const n = x => Number(String(x||'').replace(',','.')) || 0;
+  const baseDe = cort.find(x=>x[0]===de)?.[4] || 1;
+  const basePara = cort.find(x=>x[0]===para)?.[4] || 1;
+  const resultado = n(dose) ? (n(dose) * basePara / baseDe) : 0;
+  const Table = ({title, cols, rows, id}) => <div style={{ marginBottom:12, border:`1px solid ${C.borderSoft}`, borderRadius:10, overflow:'hidden' }}>
+    <button onClick={()=>setOpen(o=>({...o, [id]: !o[id]}))} style={{width:'100%', padding:'12px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', background:C.bg, color:C.text, fontWeight:800}}><span>{title}</span>{open[id] ? <I.ChevU size={16}/> : <I.ChevD size={16}/>}</button>
+    {open[id] && <div style={{overflowX:'auto'}}><table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}><thead><tr>{cols.map(c=><th key={c} style={{textAlign:'left', padding:8, background:C.bg, borderBottom:`1px solid ${C.borderSoft}`}}>{c}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{r.map((x,j)=><td key={j} style={{padding:8, borderBottom:`1px solid ${C.borderSoft}`}}>{String(x).replace('.', ',')}</td>)}</tr>)}</tbody></table></div>}
+  </div>;
+  const add = () => { if(!form.titulo.trim()) return; const cols=form.colunas.split(',').map(x=>x.trim()).filter(Boolean); const rows=form.linhas.split('\n').filter(Boolean).map(l=>l.split('|').map(x=>x.trim())); setCustom([{...form, id:'eq-'+Date.now(), cols, rows}, ...custom]); setForm({ titulo:'', colunas:'Item, Equivalência, Observações', linhas:'' }); };
+  return <Card C={C} style={{ marginBottom:16 }}>
+    <h3 className="lumen-serif" style={{ fontSize:18, margin:'0 0 10px' }}>Equivalências clínicas</h3>
+    <Card C={C} style={{ marginBottom: 14, background:C.bg }}>
+      <h4 className="lumen-serif" style={{fontSize:17, margin:'0 0 12px'}}>Calculadora de equivalência de corticoide</h4>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))', gap:12, alignItems:'end' }}>
+        <div><FormLabel C={C}>Dose</FormLabel><input value={dose} onChange={e=>setDose(e.target.value)} placeholder="Ex.: 50" type="number" style={inputStyle(C)} /></div>
+        <div><FormLabel C={C}>mg de</FormLabel><select value={de} onChange={e=>setDe(e.target.value)} style={inputStyle(C)}>{cort.map(x=><option key={x[0]}>{x[0]}</option>)}</select></div>
+        <div><FormLabel C={C}>Equivalência em</FormLabel><select value={para} onChange={e=>setPara(e.target.value)} style={inputStyle(C)}>{cort.map(x=><option key={x[0]}>{x[0]}</option>)}</select></div>
+        <div style={{ padding:12, borderRadius:999, background:C.accentSoft, color:C.accent, textAlign:'center', fontWeight:900 }}>{resultado ? resultado.toFixed(2).replace('.', ',') + ' mg' : '—'}</div>
+      </div>
+    </Card>
+    <Table id="cort" title="Tabela de equivalência de corticoides" cols={['Composto','Potência anti-inflamatória','Retenção de sódio','Duração','Dose equivalente mg']} rows={cort}/>
+    <Table id="opio" title="Tabela de equivalência de opioides analgésicos aproximados" cols={['Composto','Dose equivalente','Observação']} rows={opio}/>
+    {custom.map(t=><Table key={t.id} id={t.id} title={t.titulo} cols={t.cols} rows={t.rows}/>)}
+    <div style={{padding:12, border:`1px solid ${C.borderSoft}`, borderRadius:10, background:C.bg}}><h4 style={{margin:'0 0 8px'}}>Adicionar nova equivalência</h4><FormInput C={C} label="Título" value={form.titulo} onChange={x=>setForm({...form,titulo:x})}/><FormInput C={C} label="Colunas separadas por vírgula" value={form.colunas} onChange={x=>setForm({...form,colunas:x})}/><FormLabel C={C}>Linhas: separe colunas com | e cada linha com Enter</FormLabel><textarea value={form.linhas} onChange={e=>setForm({...form,linhas:e.target.value})} style={{...inputStyle(C), minHeight:80}} placeholder="Ex.: Morfina VO | 30 mg | referência"/><Button C={C} size="sm" onClick={add} style={{marginTop:8}}>Adicionar equivalência</Button></div>
+  </Card>;
+}
+
 
 // ============= RENDER =============
 // ============= RENDER =============
