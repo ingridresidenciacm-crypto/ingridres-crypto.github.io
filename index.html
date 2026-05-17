@@ -2261,9 +2261,43 @@ const MetaCard = ({ C, label, valor, editavel, onChange }) => (
 );
 
 // ============= ARTIGOS =============
+function CustomSectionsEditor({ C, sections = [], onChange, label = 'Caixas de texto' }) {
+  const lista = Array.isArray(sections) ? sections : [];
+  const atualizar = (idx, campo, valor) => onChange(lista.map((sec, i) => i === idx ? { ...sec, [campo]: valor } : sec));
+  const adicionar = () => onChange([...lista, { id: 'sec-' + Date.now(), titulo: '', conteudo: '' }]);
+  const remover = (idx) => onChange(lista.filter((_, i) => i !== idx));
+  const mover = (idx, dir) => {
+    const novo = [...lista];
+    const alvo = idx + dir;
+    if (alvo < 0 || alvo >= novo.length) return;
+    [novo[idx], novo[alvo]] = [novo[alvo], novo[idx]];
+    onChange(novo);
+  };
+  return <div style={{ marginTop: 14, padding: 12, borderRadius: 10, border: `1px dashed ${C.border}`, background: C.bg }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div>
+        <FormLabel C={C} style={{ marginBottom: 2 }}>{label}</FormLabel>
+        <div style={{ fontSize: 11.5, color: C.textSoft }}>Adicione as caixas que quiser, com o título definido por você.</div>
+      </div>
+      <Button C={C} size="sm" variant="secondary" icon={I.Plus} onClick={adicionar}>Adicionar caixa de texto</Button>
+    </div>
+    {lista.length === 0 ? <div style={{ fontSize: 12, color: C.textSoft, padding: '6px 0' }}>Nenhuma caixa adicionada. Clique em “Adicionar caixa de texto”.</div> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {lista.map((sec, idx) => <div key={sec.id || idx} style={{ padding: 10, borderRadius: 8, background: C.card, border: `1px solid ${C.borderSoft}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <input value={sec.titulo || ''} onChange={e => atualizar(idx, 'titulo', e.target.value)} placeholder="Título da caixa. Ex.: Contraindicações, Conduta, Pérolas, Diagnóstico..." style={{ ...inputStyle(C), padding: '8px 10px', fontWeight: 700 }} />
+          <button title="Mover para cima" onClick={() => mover(idx, -1)} disabled={idx === 0} style={{ color: idx === 0 ? C.textSoft : C.textMuted, padding: 8, display: 'flex', opacity: idx === 0 ? 0.35 : 1 }}><I.ChevU size={14} /></button>
+          <button title="Mover para baixo" onClick={() => mover(idx, 1)} disabled={idx === lista.length - 1} style={{ color: idx === lista.length - 1 ? C.textSoft : C.textMuted, padding: 8, display: 'flex', opacity: idx === lista.length - 1 ? 0.35 : 1 }}><I.ChevD size={14} /></button>
+          <button title="Excluir caixa" onClick={() => remover(idx)} style={{ color: C.error, padding: 8, display: 'flex' }}><I.Trash size={14} /></button>
+        </div>
+        <RichTextEditor C={C} value={sec.conteudo || ''} onChange={v => atualizar(idx, 'conteudo', v)} minHeight={90} placeholder="Digite o conteúdo desta caixa..." />
+      </div>)}
+    </div>}
+  </div>;
+}
+
 function Artigos({ artigos, setArtigos, C }) {
-  const artigoVazio = () => ({ titulo: '', tema: 'cardio', fonte: '', ano: new Date().getFullYear(), link: '', resumo: '', recomendacoes: '', praticos: '', mudaPratica: '', observacoes: '', tags: [] });
-  const resumoVazio = () => ({ titulo: '', tema: 'cardio', subtema: '', conteudo: '', pontosChave: '', condutaProva: '', observacoes: '', dataCriacao: new Date().toISOString() });
+  const artigoVazio = () => ({ titulo: '', tema: 'cardio', fonte: '', ano: new Date().getFullYear(), link: '', dicaProva: '', secoesCustomizadas: [], tags: [] });
+  const resumoVazio = () => ({ titulo: '', tema: 'cardio', subtema: '', dicaProva: '', secoesCustomizadas: [], dataCriacao: new Date().toISOString() });
 
   const [aba, setAba] = useState('artigos');
   const [editing, setEditing] = useState(null);
@@ -2300,16 +2334,51 @@ function Artigos({ artigos, setArtigos, C }) {
     return true;
   });
 
+  const normalizarSecoesArtigo = (a) => [
+    ...((a.secoesCustomizadas || []).map(sec => [sec.titulo || 'Seção sem título', sec.conteudo || ''])),
+    // Compatibilidade com artigos antigos cadastrados antes da atualização.
+    ['Resumo estruturado', a.resumo],
+    ['Principais recomendações', a.recomendacoes],
+    ['Pontos práticos', a.praticos],
+    ['Condutas que mudam prática', a.mudaPratica],
+    ['Observações pessoais', a.observacoes],
+  ].filter(([,txt]) => plainText(txt || '').trim());
+
+  const normalizarSecoesResumo = (r) => [
+    ...((r.secoesCustomizadas || []).map(sec => [sec.titulo || 'Seção sem título', sec.conteudo || ''])),
+    // Compatibilidade com resumos antigos cadastrados antes da atualização.
+    ['Resumo', r.conteudo],
+    ['Pontos-chave', r.pontosChave],
+    ['Observações pessoais', r.observacoes],
+  ].filter(([,txt]) => plainText(txt || '').trim());
+
+  const getDicaProva = (item) => item?.dicaProva || item?.condutaProva || '';
+
+  const prepararArtigoParaEdicao = (a) => ({
+    ...a,
+    dicaProva: getDicaProva(a),
+    secoesCustomizadas: normalizarSecoesArtigo(a).map(([titulo, conteudo], idx) => ({
+      id: `sec-edit-art-${idx}-${Date.now()}`,
+      titulo,
+      conteudo
+    }))
+  });
+
+  const prepararResumoParaEdicao = (r) => ({
+    ...r,
+    dicaProva: getDicaProva(r),
+    secoesCustomizadas: normalizarSecoesResumo(r).map(([titulo, conteudo], idx) => ({
+      id: `sec-edit-res-${idx}-${Date.now()}`,
+      titulo,
+      conteudo
+    }))
+  });
+
   const artigoSelecionado = artigos.find(a => a.id === artigoAberto);
   if (artigoSelecionado) {
     const temaSel = ESPECIALIDADES.find(t => t.id === artigoSelecionado.tema);
-    const secoesArtigo = [
-      ['Resumo estruturado', artigoSelecionado.resumo],
-      ['Principais recomendações', artigoSelecionado.recomendacoes],
-      ['Pontos práticos', artigoSelecionado.praticos],
-      ['Condutas que mudam prática', artigoSelecionado.mudaPratica],
-      ['Observações pessoais', artigoSelecionado.observacoes]
-    ].filter(([,txt]) => plainText(txt || '').trim());
+    const secoesArtigo = normalizarSecoesArtigo(artigoSelecionado);
+    const dicaArtigo = getDicaProva(artigoSelecionado);
     return <div className="lumen-fade-in">
       <Button C={C} variant="ghost" size="sm" icon={I.ArrowL} onClick={() => setArtigoAberto(null)} style={{ marginBottom: 16 }}>Voltar à biblioteca</Button>
       <div className="lumen-grid-resp" style={{ display:'grid', gridTemplateColumns: menuLeituraAberto ? '260px minmax(0, 1fr)' : '46px minmax(0, 1fr)', gap:18, alignItems:'start' }}>
@@ -2321,6 +2390,7 @@ function Artigos({ artigos, setArtigos, C }) {
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>{temaSel && <Badge C={C}>{temaSel.nome}</Badge>}<Badge C={C} color="soft">{artigoSelecionado.fonte}</Badge><Badge C={C} color="soft">{artigoSelecionado.ano}</Badge></div>
           <h2 className="lumen-serif" style={{ fontSize:'clamp(26px,4vw,38px)', margin:'0 0 16px', lineHeight:1.15, color:C.text }}>{artigoSelecionado.titulo}</h2>
           {artigoSelecionado.link && <a href={artigoSelecionado.link} target="_blank" rel="noreferrer" style={{ color:C.accent, fontWeight:700, fontSize:13 }}>Abrir fonte original ↗</a>}
+          {dicaArtigo && <div style={{ marginTop:18, padding:14, borderRadius:10, background:C.accentSoft, color:C.accent, fontSize:14, lineHeight:1.65 }}><strong>Dica de prova:</strong> <HtmlText html={dicaArtigo} C={C} style={{ color:C.accent, display:'inline' }} /></div>}
           <div style={{ marginTop:22 }}>{secoesArtigo.map(([titulo, txt]) => <section id={slugify(titulo)} key={titulo} style={{ marginBottom:24, scrollMarginTop:90 }}>
             <h3 style={{ fontSize:18, margin:'0 0 10px', padding:'10px 12px', borderRadius:10, color:C.accent, background:C.accentSoft, display:'inline-block' }}>{titulo}</h3>
             <HtmlText html={txt} C={C} style={{ fontSize:15.5, lineHeight:1.8 }} />
@@ -2333,12 +2403,8 @@ function Artigos({ artigos, setArtigos, C }) {
   const resumoSelecionado = resumos.find(r => r.id === resumoAberto);
   if (resumoSelecionado) {
     const temaSel = ESPECIALIDADES.find(t => t.id === resumoSelecionado.tema);
-    const secoesResumo = [
-      ['Resumo', resumoSelecionado.conteudo],
-      ['Pontos-chave', resumoSelecionado.pontosChave],
-      ['Dica de prova / pegadinhas', resumoSelecionado.condutaProva],
-      ['Observações pessoais', resumoSelecionado.observacoes]
-    ].filter(([,txt]) => plainText(txt || '').trim());
+    const secoesResumo = normalizarSecoesResumo(resumoSelecionado);
+    const dicaResumo = getDicaProva(resumoSelecionado);
     return <div className="lumen-fade-in">
       <Button C={C} variant="ghost" size="sm" icon={I.ArrowL} onClick={() => setResumoAberto(null)} style={{ marginBottom: 16 }}>Voltar aos resumos</Button>
       <div className="lumen-grid-resp" style={{ display:'grid', gridTemplateColumns:'260px minmax(0, 1fr)', gap:18, alignItems:'start' }}>
@@ -2349,6 +2415,7 @@ function Artigos({ artigos, setArtigos, C }) {
         <Card C={C} style={{ padding:'clamp(22px, 4vw, 38px)' }}>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>{temaSel && <Badge C={C}>{temaSel.nome}</Badge>}{resumoSelecionado.subtema && <Badge C={C} color="soft">{resumoSelecionado.subtema}</Badge>}</div>
           <h2 className="lumen-serif" style={{ fontSize:'clamp(26px,4vw,38px)', margin:'0 0 22px', lineHeight:1.15, color:C.text }}>{resumoSelecionado.titulo}</h2>
+          {dicaResumo && <div style={{ marginBottom:22, padding:14, borderRadius:10, background:C.accentSoft, color:C.accent, fontSize:14, lineHeight:1.65 }}><strong>Dica de prova:</strong> <HtmlText html={dicaResumo} C={C} style={{ color:C.accent, display:'inline' }} /></div>}
           {secoesResumo.map(([titulo, txt]) => <section id={slugify(titulo)} key={titulo} style={{ marginBottom:24, scrollMarginTop:90 }}>
             <h3 style={{ fontSize:18, margin:'0 0 10px', padding:'10px 12px', borderRadius:10, color:C.accent, background:C.accentSoft, display:'inline-block' }}>{titulo}</h3>
             <HtmlText html={txt} C={C} style={{ fontSize:15.5, lineHeight:1.8 }} />
@@ -2400,8 +2467,8 @@ function Artigos({ artigos, setArtigos, C }) {
         <select value={filtroTema} onChange={e => setFiltroTema(e.target.value)} style={{ ...inputStyle(C), maxWidth: 240, padding: '8px 12px' }}><option value="todos">Todas as especialidades</option>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select>
         <select value={filtroAno} onChange={e => setFiltroAno(e.target.value)} style={{ ...inputStyle(C), maxWidth: 180, padding: '8px 12px' }}><option value="todos">Todos os anos</option>{anos.map(a => <option key={a} value={a}>{a}</option>)}</select>
       </div>
-      {showForm && <Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Novo'} artigo/guideline</h3><FormInput C={C} label="Título" value={form.titulo} onChange={v => setForm({...form, titulo: v})} /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 10 }}><div><FormLabel C={C}>Especialidade</FormLabel><select value={form.tema} onChange={e => setForm({...form, tema: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><FormInput C={C} label="Fonte" value={form.fonte} onChange={v => setForm({...form, fonte: v})} /><FormInput C={C} label="Ano" type="number" value={form.ano} onChange={v => setForm({...form, ano: parseInt(v) || ''})} /><FormInput C={C} label="Link" value={form.link} onChange={v => setForm({...form, link: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Resumo estruturado</FormLabel><RichTextEditor C={C} value={form.resumo} onChange={v => setForm({...form, resumo: v})} minHeight={90} /><FormLabel C={C} style={{ marginTop: 12 }}>Principais recomendações</FormLabel><RichTextEditor C={C} value={form.recomendacoes} onChange={v => setForm({...form, recomendacoes: v})} minHeight={90} /><FormLabel C={C} style={{ marginTop: 12 }}>Pontos práticos</FormLabel><RichTextEditor C={C} value={form.praticos} onChange={v => setForm({...form, praticos: v})} minHeight={90} /><FormLabel C={C} style={{ marginTop: 12 }}>Condutas que mudam prática</FormLabel><RichTextEditor C={C} value={form.mudaPratica} onChange={v => setForm({...form, mudaPratica: v})} minHeight={70} /><FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><RichTextEditor C={C} value={form.observacoes} onChange={v => setForm({...form, observacoes: v})} minHeight={70} /><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div></Card>}
-      {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.BookMark size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum item com esses filtros.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>{filtrados.map(a => { const tema = ESPECIALIDADES.find(t => t.id === a.tema); return <Card key={a.id} C={C} hover onClick={() => setArtigoAberto(a.id)}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<div style={{ fontSize: 12, color: C.textSoft }}>{a.ano}</div></div><h4 className="lumen-serif" style={{ fontSize: 16, margin: '4px 0 6px', fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{a.titulo}</h4><div style={{ fontSize: 12, color: C.textSoft, marginBottom: 10 }}>{a.fonte}</div>{a.resumo && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{plainText(a.resumo)}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end', alignItems: 'center' }}>{a.link && <a href={a.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.accent, fontWeight: 600, marginRight: 'auto' }}>Ver fonte ↗</a>}<button onClick={(e) => { e.stopPropagation(); setForm(a); setEditing(a.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Edit size={13} /></button><button onClick={(e) => { e.stopPropagation(); if (confirm('Deseja realmente excluir este artigo/guideline?')) setArtigos(artigos.filter(x => x.id !== a.id)); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Trash size={13} /></button></div></Card>; })}</div>}
+      {showForm && <Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Novo'} artigo/guideline</h3><FormInput C={C} label="Título" value={form.titulo} onChange={v => setForm({...form, titulo: v})} /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 10 }}><div><FormLabel C={C}>Especialidade</FormLabel><select value={form.tema} onChange={e => setForm({...form, tema: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><FormInput C={C} label="Fonte" value={form.fonte} onChange={v => setForm({...form, fonte: v})} /><FormInput C={C} label="Ano" type="number" value={form.ano} onChange={v => setForm({...form, ano: parseInt(v) || ''})} /><FormInput C={C} label="Link" value={form.link} onChange={v => setForm({...form, link: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova</FormLabel><RichTextEditor C={C} value={form.dicaProva || form.condutaProva || ''} onChange={v => setForm({...form, dicaProva: v})} minHeight={80} placeholder="Macete, pegadinha ou ponto que costuma cair na prova" /><CustomSectionsEditor C={C} sections={form.secoesCustomizadas || []} onChange={secs => setForm({...form, secoesCustomizadas: secs})} label="Caixas de texto do artigo/guideline" /><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div></Card>}
+      {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.BookMark size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum item com esses filtros.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>{filtrados.map(a => { const tema = ESPECIALIDADES.find(t => t.id === a.tema); return <Card key={a.id} C={C} hover onClick={() => setArtigoAberto(a.id)}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>{tema && <Badge C={C}>{tema.nome}</Badge>}<div style={{ fontSize: 12, color: C.textSoft }}>{a.ano}</div></div><h4 className="lumen-serif" style={{ fontSize: 16, margin: '4px 0 6px', fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{a.titulo}</h4><div style={{ fontSize: 12, color: C.textSoft, marginBottom: 10 }}>{a.fonte}</div>{normalizarSecoesArtigo(a)[0] && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{plainText(normalizarSecoesArtigo(a)[0][1])}</div>}{getDicaProva(a) && <div style={{ padding: 10, borderRadius: 8, background: C.accentSoft, color: C.accent, fontSize: 12.5, lineHeight: 1.45, marginTop: 8 }}><strong>Dica de prova:</strong> {plainText(getDicaProva(a))}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end', alignItems: 'center' }}>{a.link && <a href={a.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.accent, fontWeight: 600, marginRight: 'auto' }}>Ver fonte ↗</a>}<button onClick={(e) => { e.stopPropagation(); setForm(prepararArtigoParaEdicao(a)); setEditing(a.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Edit size={13} /></button><button onClick={(e) => { e.stopPropagation(); if (confirm('Deseja realmente excluir este artigo/guideline?')) setArtigos(artigos.filter(x => x.id !== a.id)); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }}><I.Trash size={13} /></button></div></Card>; })}</div>}
     </>}
 
     {aba === 'resumos' && <>
@@ -2418,14 +2485,12 @@ function Artigos({ artigos, setArtigos, C }) {
           <div><FormLabel C={C}>Especialidade</FormLabel><select value={resumoForm.tema} onChange={e => setResumoForm({...resumoForm, tema: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div>
           <div><FormLabel C={C}>Subtema</FormLabel><input list="subtemas-resumos" value={resumoForm.subtema} onChange={e => setResumoForm({...resumoForm, subtema: e.target.value})} placeholder="Ex.: Hipercalcemia, Sepse, ICFEp..." style={inputStyle(C)} /><datalist id="subtemas-resumos">{[...new Set(resumos.map(r => r.subtema).filter(Boolean))].sort().map(s => <option key={s} value={s} />)}</datalist></div>
         </div>
-        <FormLabel C={C} style={{ marginTop: 12 }}>Resumo</FormLabel><RichTextEditor C={C} value={resumoForm.conteudo} onChange={v => setResumoForm({...resumoForm, conteudo: v})} minHeight={130} />
-        <FormLabel C={C} style={{ marginTop: 12 }}>Pontos-chave</FormLabel><RichTextEditor C={C} value={resumoForm.pontosChave} onChange={v => setResumoForm({...resumoForm, pontosChave: v})} minHeight={90} />
-        <FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova / pegadinhas</FormLabel><RichTextEditor C={C} value={resumoForm.condutaProva} onChange={v => setResumoForm({...resumoForm, condutaProva: v})} minHeight={80} />
-        <FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><RichTextEditor C={C} value={resumoForm.observacoes} onChange={v => setResumoForm({...resumoForm, observacoes: v})} minHeight={70} />
+        <FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova</FormLabel><RichTextEditor C={C} value={resumoForm.dicaProva || resumoForm.condutaProva || ''} onChange={v => setResumoForm({...resumoForm, dicaProva: v})} minHeight={80} placeholder="Macete, pegadinha ou ponto que costuma cair na prova" />
+        <CustomSectionsEditor C={C} sections={resumoForm.secoesCustomizadas || []} onChange={secs => setResumoForm({...resumoForm, secoesCustomizadas: secs})} label="Caixas de texto do resumo" />
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvarResumo}>Salvar resumo</Button><Button C={C} variant="ghost" onClick={() => { setShowResumoForm(false); setEditingResumo(null); }}>Cancelar</Button></div>
       </Card>}
 
-      {resumosFiltrados.length === 0 && !showResumoForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.File size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum resumo cadastrado. Clique em “Novo resumo”.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>{resumosFiltrados.map(r => { const tema = ESPECIALIDADES.find(t => t.id === r.tema); return <Card key={r.id} C={C} hover onClick={() => setResumoAberto(r.id)}><div style={{ display: 'flex', gap: 6, justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{tema && <Badge C={C}>{tema.nome}</Badge>}{r.subtema && <Badge C={C} color="soft">{r.subtema}</Badge>}</div></div><h4 className="lumen-serif" style={{ fontSize: 17, margin: '4px 0 8px', fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{r.titulo}</h4>{r.conteudo && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 8 }}>{plainText(r.conteudo)}</div>}{r.condutaProva && <div style={{ padding: 10, borderRadius: 8, background: C.accentSoft, color: C.accent, fontSize: 12.5, lineHeight: 1.45, marginTop: 8 }}><strong>Dica de prova:</strong> {plainText(r.condutaProva)}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={(e) => { e.stopPropagation(); setResumoForm(r); setEditingResumo(r.id); setShowResumoForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar resumo"><I.Edit size={13} /></button><button onClick={(e) => { e.stopPropagation(); excluirResumo(r.id); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir resumo"><I.Trash size={13} /></button></div></Card>; })}</div>}
+      {resumosFiltrados.length === 0 && !showResumoForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.File size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum resumo cadastrado. Clique em “Novo resumo”.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>{resumosFiltrados.map(r => { const tema = ESPECIALIDADES.find(t => t.id === r.tema); return <Card key={r.id} C={C} hover onClick={() => setResumoAberto(r.id)}><div style={{ display: 'flex', gap: 6, justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{tema && <Badge C={C}>{tema.nome}</Badge>}{r.subtema && <Badge C={C} color="soft">{r.subtema}</Badge>}</div></div><h4 className="lumen-serif" style={{ fontSize: 17, margin: '4px 0 8px', fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{r.titulo}</h4>{normalizarSecoesResumo(r)[0] && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 8 }}>{plainText(normalizarSecoesResumo(r)[0][1])}</div>}{getDicaProva(r) && <div style={{ padding: 10, borderRadius: 8, background: C.accentSoft, color: C.accent, fontSize: 12.5, lineHeight: 1.45, marginTop: 8 }}><strong>Dica de prova:</strong> {plainText(getDicaProva(r))}</div>}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={(e) => { e.stopPropagation(); setResumoForm(prepararResumoParaEdicao(r)); setEditingResumo(r.id); setShowResumoForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar resumo"><I.Edit size={13} /></button><button onClick={(e) => { e.stopPropagation(); excluirResumo(r.id); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir resumo"><I.Trash size={13} /></button></div></Card>; })}</div>}
     </>}
   </div>;
 }
@@ -2561,7 +2626,11 @@ function CalcScoreDetail({ item, C, onBack, onEdit }) {
 // ============= GUIA DE ANTIMICROBIANOS =============
 function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   const itemVazio = () => ({ id: 'atb-' + Date.now(), tipo: 'Agente etiológico', agente: '', classe: '', antibiotico: '', cobertura: '', resistencia: '', mecanismoAcao: '', observacoes: '' });
-  const tabelaVazia = () => ({
+  const tabelaCoberturaVazia = () => ({
+    columns: ['Antimicrobiano', 'Classe', 'Cobertura principal', 'Não cobre / resistência', 'Foco ou síndrome', 'Observações'],
+    rows: []
+  });
+  const tabelaAgentesVazia = () => ({
     columns: ['Agente etiológico', 'Gram / tipo', 'Síndrome ou foco', 'Cobertura empírica sugerida', 'Resistências / não cobre', 'Observações'],
     rows: []
   });
@@ -2571,10 +2640,28 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [busca, setBusca] = useState('');
   const [showTabela, setShowTabela] = useState(false);
-  const [tabela, setTabela] = useState(() => storage.get('lumen_tabela_agentes_etiologicos', tabelaVazia()));
+  const [planilhaAtiva, setPlanilhaAtiva] = useState('cobertura');
+  const [tabelaCobertura, setTabelaCobertura] = useState(() => storage.get('lumen_tabela_cobertura_antimicrobiana_v2', tabelaCoberturaVazia()));
+  const [tabelaAgentes, setTabelaAgentes] = useState(() => storage.get('lumen_tabela_agentes_etiologicos', tabelaAgentesVazia()));
+  const [planilhasExtras, setPlanilhasExtras] = useState(() => storage.get('lumen_planilhas_extras_antimicrobianos', []));
   const [filtroTabela, setFiltroTabela] = useState('');
+  const planilhasBase = [
+    { id: 'cobertura', nome: 'Antimicrobianos · cobertura', tabela: tabelaCobertura },
+    { id: 'agentes', nome: 'Agentes etiológicos', tabela: tabelaAgentes }
+  ];
+  const todasPlanilhas = [...planilhasBase, ...(planilhasExtras || [])];
+  const planilhaAtual = todasPlanilhas.find(p => p.id === planilhaAtiva) || planilhasBase[0];
+  const tabela = planilhaAtual.tabela || { columns: ['Coluna 1', 'Coluna 2'], rows: [] };
+  const setTabela = (updater) => {
+    const prox = typeof updater === 'function' ? updater(tabela) : updater;
+    if (planilhaAtiva === 'cobertura') setTabelaCobertura(prox);
+    else if (planilhaAtiva === 'agentes') setTabelaAgentes(prox);
+    else setPlanilhasExtras((planilhasExtras || []).map(p => p.id === planilhaAtiva ? { ...p, tabela: prox } : p));
+  };
 
-  useEffect(() => { storage.set('lumen_tabela_agentes_etiologicos', tabela); }, [tabela]);
+  useEffect(() => { storage.set('lumen_tabela_cobertura_antimicrobiana_v2', tabelaCobertura); }, [tabelaCobertura]);
+  useEffect(() => { storage.set('lumen_tabela_agentes_etiologicos', tabelaAgentes); }, [tabelaAgentes]);
+  useEffect(() => { storage.set('lumen_planilhas_extras_antimicrobianos', planilhasExtras); }, [planilhasExtras]);
 
   const filtrados = useMemo(() => (antimicrobianos || []).filter(a => {
     if (filtroTipo !== 'todos' && a.tipo !== filtroTipo) return false;
@@ -2616,26 +2703,51 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
     setTabela(t => ({ columns: (t.columns || []).filter((_, i) => i !== idx), rows: (t.rows || []).map(r => (r || []).filter((_, i) => i !== idx)) }));
   };
   const limparTabela = () => { if (confirm('Deseja limpar todas as linhas da planilha? As colunas serão mantidas.')) setTabela(t => ({ ...t, rows: [] })); };
+  const adicionarPlanilha = () => {
+    const nome = prompt('Nome da nova planilha:');
+    if (!nome?.trim()) return;
+    const nova = { id: 'planilha-' + Date.now(), nome: nome.trim(), tabela: { columns: ['Coluna 1', 'Coluna 2', 'Observações'], rows: [] } };
+    setPlanilhasExtras([...(planilhasExtras || []), nova]);
+    setPlanilhaAtiva(nova.id);
+    setFiltroTabela('');
+  };
+  const renomearPlanilha = () => {
+    if (planilhaAtiva === 'cobertura' || planilhaAtiva === 'agentes') return alert('As duas planilhas principais não podem ser renomeadas. Crie uma planilha extra para nomes personalizados.');
+    const atual = (planilhasExtras || []).find(p => p.id === planilhaAtiva);
+    const nome = prompt('Novo nome da planilha:', atual?.nome || '');
+    if (!nome?.trim()) return;
+    setPlanilhasExtras((planilhasExtras || []).map(p => p.id === planilhaAtiva ? { ...p, nome: nome.trim() } : p));
+  };
+  const excluirPlanilha = () => {
+    if (planilhaAtiva === 'cobertura' || planilhaAtiva === 'agentes') return alert('As duas planilhas principais não podem ser excluídas.');
+    if (!confirm('Deseja excluir esta planilha personalizada?')) return;
+    setPlanilhasExtras((planilhasExtras || []).filter(p => p.id !== planilhaAtiva));
+    setPlanilhaAtiva('cobertura');
+    setFiltroTabela('');
+  };
 
   return <div className="lumen-fade-in">
     <Card C={C} style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
       <div><h3 className="lumen-serif" style={{ fontSize: 20, margin: '0 0 4px' }}>Guia pessoal de antimicrobianos</h3><div style={{ fontSize: 13, color: C.textMuted }}>Organize por agente etiológico, classe/antibiótico, mecanismo de ação e cobertura de microrganismos.</div></div>
-      <Button C={C} icon={I.File} onClick={() => setShowTabela(!showTabela)}>{showTabela ? 'Fechar planilha' : 'Abrir planilha de agentes etiológicos'}</Button>
+      <Button C={C} icon={I.File} onClick={() => setShowTabela(!showTabela)}>{showTabela ? 'Fechar planilhas' : 'Abrir planilhas'}</Button>
     </Card>
 
     {showTabela && <Card C={C} style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
-          <h3 className="lumen-serif" style={{ fontSize: 18, margin: 0 }}>Planilha de agentes etiológicos</h3>
-          <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>Tabela editável com linhas e colunas para organizar agentes etiológicos, foco clínico, cobertura sugerida, resistências e observações. Os dados ficam salvos neste navegador.</div>
+          <h3 className="lumen-serif" style={{ fontSize: 18, margin: 0 }}>{planilhaAtual.nome || 'Planilha personalizada'}</h3>
+          <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>Planilha editável com linhas e colunas livres. Use as duas planilhas principais ou crie quantas planilhas extras quiser. Os dados ficam salvos neste navegador.</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button C={C} size="sm" icon={I.Plus} onClick={adicionarLinha}>Adicionar linha</Button>
           <Button C={C} size="sm" variant="secondary" icon={I.Plus} onClick={adicionarColuna}>Adicionar coluna</Button>
-          <Button C={C} size="sm" variant="danger" icon={I.Trash} onClick={limparTabela}>Limpar linhas</Button>
+          <Button C={C} size="sm" variant="danger" icon={I.Trash} onClick={limparTabela}>Limpar linhas</Button><Button C={C} size="sm" variant="secondary" icon={I.Plus} onClick={adicionarPlanilha}>Nova planilha</Button>{!(planilhaAtiva === 'cobertura' || planilhaAtiva === 'agentes') && <Button C={C} size="sm" variant="secondary" icon={I.Edit} onClick={renomearPlanilha}>Renomear</Button>}{!(planilhaAtiva === 'cobertura' || planilhaAtiva === 'agentes') && <Button C={C} size="sm" variant="danger" icon={I.Trash} onClick={excluirPlanilha}>Excluir planilha</Button>}
         </div>
       </div>
-      <input value={filtroTabela} onChange={e => setFiltroTabela(e.target.value)} placeholder="Filtrar por agente etiológico, síndrome/foco, cobertura ou resistência..." style={{ ...inputStyle(C), padding: '8px 12px', marginBottom: 12 }} />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        {todasPlanilhas.map(p => <button key={p.id} onClick={() => { setPlanilhaAtiva(p.id); setFiltroTabela(''); }} style={pillStyle(C, planilhaAtiva === p.id)}>{p.nome}</button>)}
+      </div>
+      <input value={filtroTabela} onChange={e => setFiltroTabela(e.target.value)} placeholder="Filtrar nesta planilha..." style={{ ...inputStyle(C), padding: '8px 12px', marginBottom: 12 }} />
       <div className="lumen-scroll" style={{ overflowX: 'auto', border: `1px solid ${C.borderSoft}`, borderRadius: 10 }}>
         <table style={{ width: '100%', minWidth: 820, borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
