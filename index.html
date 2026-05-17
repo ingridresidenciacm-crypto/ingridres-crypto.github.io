@@ -77,8 +77,16 @@
     window.lumenFirebaseDB = firebase.database();
     window.__lumenCloudWriteEnabled = false;
     window.__lumenApplyingRemote = false;
+    window.__lumenFirebaseLastError = null;
+
+    // Teste rápido de conexão/permissão. Veja o console do navegador se houver erro.
+    window.lumenFirebaseDB.ref('.info/connected').on('value', snapshot => {
+      window.__lumenFirebaseConnected = !!snapshot.val();
+      console.log('Firebase conectado:', window.__lumenFirebaseConnected);
+    });
   } catch (error) {
     console.warn("Firebase não inicializado:", error);
+    window.__lumenFirebaseLastError = error;
     window.lumenFirebaseDB = null;
   }
 </script>
@@ -167,7 +175,10 @@ const storage = {
         window.lumenFirebaseDB
           .ref(`${FIREBASE_BASE_PATH}/${firebaseKey(key)}`)
           .set(value)
-          .catch(err => console.warn('Erro ao salvar no Firebase:', key, err));
+          .catch(err => {
+            window.__lumenFirebaseLastError = err;
+            console.warn('Erro ao salvar no Firebase:', key, err);
+          });
       }
 
       return true;
@@ -212,6 +223,7 @@ const storage = {
         return false;
       })
       .catch(err => {
+        window.__lumenFirebaseLastError = err;
         console.warn('Erro ao preparar sincronização Firebase:', key, err);
         return false;
       });
@@ -353,6 +365,7 @@ function App() {
       ['lumen_questoes', setQuestoes, questoes],
       ['lumen_flashcards', setFlashcards, flashcards],
       ['lumen_artigos', setArtigos, artigos],
+      ['lumen_resumos_biblioteca', () => {}, storage.get('lumen_resumos_biblioteca', [])],
       ['lumen_calculadoras_escores', setCalculadoras, calculadoras],
       ['lumen_antimicrobianos', setAntimicrobianos, antimicrobianos],
       ['lumen_medicamentos', setMedicamentos, medicamentos],
@@ -2315,6 +2328,14 @@ function Artigos({ artigos, setArtigos, C }) {
   const [filtroResumoSubtema, setFiltroResumoSubtema] = useState('todos');
   const [resumoForm, setResumoForm] = useState(resumoVazio());
   const [resumoAberto, setResumoAberto] = useState(null);
+
+  useEffect(() => {
+    storage.ensureRemote('lumen_resumos_biblioteca', resumos);
+    const unsubscribe = storage.subscribe('lumen_resumos_biblioteca', value => {
+      setResumos(Array.isArray(value) ? value : []);
+    });
+    return () => unsubscribe && unsubscribe();
+  }, []);
 
   useEffect(() => { storage.set('lumen_resumos_biblioteca', resumos); }, [resumos]);
 
