@@ -2649,20 +2649,7 @@ function CalcScoreDetail({ item, C, onBack, onEdit }) {
 
 // ============= GUIA DE ANTIMICROBIANOS =============
 function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
-  const itemVazio = () => ({
-    id: 'atb-' + Date.now(),
-    tipo: 'Agente etiológico',
-    titulo: '',
-    agente: '',
-    classe: '',
-    antibiotico: '',
-    cobertura: '',
-    resistencia: '',
-    mecanismoAcao: '',
-    dicaProva: '',
-    secoesCustomizadas: [],
-    observacoes: ''
-  });
+  const itemVazio = () => ({ id: 'atb-' + Date.now(), titulo: '', tipo: 'Agente etiológico', agente: '', classe: '', antibiotico: '', cobertura: '', resistencia: '', mecanismoAcao: '', dicaProva: '', observacoes: '', secoesCustomizadas: [] });
   const tabelaCoberturaVazia = () => ({
     columns: ['Antimicrobiano', 'Classe', 'Cobertura principal', 'Não cobre / resistência', 'Foco ou síndrome', 'Observações'],
     rows: []
@@ -2674,7 +2661,6 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(itemVazio());
-  const [registroAberto, setRegistroAberto] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [busca, setBusca] = useState('');
   const [showTabela, setShowTabela] = useState(false);
@@ -2683,7 +2669,6 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   const [tabelaAgentes, setTabelaAgentes] = useState(() => storage.get('lumen_tabela_agentes_etiologicos', tabelaAgentesVazia()));
   const [planilhasExtras, setPlanilhasExtras] = useState(() => storage.get('lumen_planilhas_extras_antimicrobianos', []));
   const [filtroTabela, setFiltroTabela] = useState('');
-
   const planilhasBase = [
     { id: 'cobertura', nome: 'Antimicrobianos · cobertura', tabela: tabelaCobertura },
     { id: 'agentes', nome: 'Agentes etiológicos', tabela: tabelaAgentes }
@@ -2702,18 +2687,11 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   useEffect(() => { storage.set('lumen_tabela_agentes_etiologicos', tabelaAgentes); }, [tabelaAgentes]);
   useEffect(() => { storage.set('lumen_planilhas_extras_antimicrobianos', planilhasExtras); }, [planilhasExtras]);
 
-  const tituloRegistro = (a) => a?.titulo || a?.antibiotico || a?.agente || a?.classe || 'Registro sem título';
-
   const filtrados = useMemo(() => (antimicrobianos || []).filter(a => {
     if (filtroTipo !== 'todos' && a.tipo !== filtroTipo) return false;
     const q = busca.toLowerCase().trim();
     if (!q) return true;
-    return [
-      a.titulo, a.agente, a.classe, a.antibiotico,
-      plainText(a.cobertura || ''), plainText(a.resistencia || ''), plainText(a.mecanismoAcao || a.doseHabitual || ''),
-      plainText(a.dicaProva || ''), plainText(a.observacoes || ''),
-      ...(a.secoesCustomizadas || []).flatMap(sec => [sec.titulo, plainText(sec.conteudo || '')])
-    ].some(v => String(v || '').toLowerCase().includes(q));
+    return [a.titulo, a.agente, a.classe, a.antibiotico, a.cobertura, a.resistencia, a.mecanismoAcao, a.doseHabitual, a.dicaProva, a.observacoes, ...((a.secoesCustomizadas || []).flatMap(sec => [sec.titulo, sec.conteudo]))].some(v => String(plainText(v || '')).toLowerCase().includes(q));
   }), [antimicrobianos, filtroTipo, busca]);
 
   const linhasFiltradasTabela = useMemo(() => {
@@ -2723,13 +2701,14 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   }, [tabela, filtroTabela]);
 
   const salvar = () => {
-    const tituloAutomatico = form.titulo || form.antibiotico || form.agente || form.classe;
-    if (!String(tituloAutomatico || '').trim()) return alert('Preencha pelo menos o título, agente etiológico, classe ou antibiótico.');
+    const tituloRegistro = String(form.titulo || form.antibiotico || form.agente || form.classe || '').trim();
+    const temTextoLivre = (form.secoesCustomizadas || []).some(sec => String(sec.titulo || '').trim() || plainText(sec.conteudo || '').trim());
+    if (!tituloRegistro && !temTextoLivre) return alert('Preencha pelo menos o título do registro ou uma caixa de texto.');
     const item = {
       ...form,
-      titulo: String(tituloAutomatico || '').trim(),
+      titulo: tituloRegistro || 'Registro sem título',
       mecanismoAcao: form.mecanismoAcao || form.doseHabitual || '',
-      secoesCustomizadas: Array.isArray(form.secoesCustomizadas) ? form.secoesCustomizadas : [],
+      secoesCustomizadas: form.secoesCustomizadas || [],
       atualizadoEm: new Date().toISOString()
     };
     delete item.doseHabitual;
@@ -2737,25 +2716,7 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
     else setAntimicrobianos([item, ...(antimicrobianos || [])]);
     setShowForm(false); setEditing(null); setForm(itemVazio());
   };
-  const abrirEdicao = (a) => {
-    setForm({
-      ...itemVazio(),
-      ...a,
-      titulo: a.titulo || a.antibiotico || a.agente || a.classe || '',
-      mecanismoAcao: a.mecanismoAcao || a.doseHabitual || '',
-      secoesCustomizadas: Array.isArray(a.secoesCustomizadas) ? a.secoesCustomizadas : []
-    });
-    setEditing(a.id);
-    setShowForm(true);
-    setRegistroAberto(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-  const excluir = (id) => {
-    if (confirm('Deseja realmente excluir este registro do guia de antimicrobianos?')) {
-      setAntimicrobianos((antimicrobianos || []).filter(a => a.id !== id));
-      if (registroAberto === id) setRegistroAberto(null);
-    }
-  };
+  const excluir = (id) => { if (confirm('Deseja realmente excluir este registro do guia de antimicrobianos?')) setAntimicrobianos((antimicrobianos || []).filter(a => a.id !== id)); };
 
   const atualizarCelula = (rowIndexOriginal, colIndex, valor) => {
     setTabela(t => ({ ...t, rows: (t.rows || []).map((row, idx) => idx === rowIndexOriginal ? (t.columns || []).map((_, c) => c === colIndex ? valor : (row?.[c] || '')) : row) }));
@@ -2797,44 +2758,9 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
     setFiltroTabela('');
   };
 
-  const aberto = registroAberto ? (antimicrobianos || []).find(a => a.id === registroAberto) : null;
-  if (aberto) {
-    const secoes = [
-      ['Cobertura / espectro', aberto.cobertura],
-      ['Resistências / não cobre', aberto.resistencia],
-      ['Mecanismo de ação', aberto.mecanismoAcao || aberto.doseHabitual],
-      ['Dica de prova', aberto.dicaProva],
-      ...((aberto.secoesCustomizadas || []).map(sec => [sec.titulo || 'Seção personalizada', sec.conteudo || ''])),
-      ['Observações', aberto.observacoes]
-    ].filter(([, txt]) => plainText(txt || '').trim());
-    return <div className="lumen-fade-in">
-      <Button C={C} variant="ghost" size="sm" icon={I.ArrowL} onClick={() => setRegistroAberto(null)} style={{ marginBottom: 16 }}>Voltar ao guia</Button>
-      <Card C={C} style={{ padding: 'clamp(22px, 4vw, 38px)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: 12 }}>
-          <div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-              <Badge C={C}>{aberto.tipo}</Badge>{aberto.classe && <Badge C={C} color="soft">{aberto.classe}</Badge>}{aberto.agente && <Badge C={C} color="soft">{aberto.agente}</Badge>}
-            </div>
-            <h2 className="lumen-serif" style={{ fontSize: 'clamp(26px,4vw,38px)', margin: 0, lineHeight: 1.15, color: C.text }}>{tituloRegistro(aberto)}</h2>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button C={C} variant="secondary" size="sm" icon={I.Edit} onClick={() => abrirEdicao(aberto)}>Editar</Button>
-            <Button C={C} variant="danger" size="sm" icon={I.Trash} onClick={() => excluir(aberto.id)}>Excluir</Button>
-          </div>
-        </div>
-        {secoes.length === 0 ? <div style={{ padding: 28, color: C.textSoft, textAlign: 'center' }}>Nenhum texto cadastrado neste registro.</div> : <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginTop: 22 }}>
-          {secoes.map(([titulo, txt]) => <section key={titulo} style={{ padding: 16, borderRadius: 12, background: titulo === 'Dica de prova' ? C.accentSoft : C.bg, border: `1px solid ${titulo === 'Dica de prova' ? C.accent + '55' : C.borderSoft}` }}>
-            <h3 style={{ fontSize: 16, margin: '0 0 10px', color: titulo === 'Dica de prova' ? C.accent : C.text }}>{titulo}</h3>
-            <HtmlText html={txt} C={C} style={{ fontSize: 14.5, lineHeight: 1.75 }} />
-          </section>)}
-        </div>}
-      </Card>
-    </div>;
-  }
-
   return <div className="lumen-fade-in">
     <Card C={C} style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-      <div><h3 className="lumen-serif" style={{ fontSize: 20, margin: '0 0 4px' }}>Guia pessoal de antimicrobianos</h3><div style={{ fontSize: 13, color: C.textMuted }}>Cadastre registros por título. Clique no título para abrir o conteúdo completo. Adicione quantas caixas de texto quiser.</div></div>
+      <div><h3 className="lumen-serif" style={{ fontSize: 20, margin: '0 0 4px' }}>Guia pessoal de antimicrobianos</h3><div style={{ fontSize: 13, color: C.textMuted }}>Organize por agente etiológico, classe/antibiótico, mecanismo de ação e cobertura de microrganismos.</div></div>
       <Button C={C} icon={I.File} onClick={() => setShowTabela(!showTabela)}>{showTabela ? 'Fechar planilhas' : 'Abrir planilhas'}</Button>
     </Card>
 
@@ -2842,7 +2768,7 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
           <h3 className="lumen-serif" style={{ fontSize: 18, margin: 0 }}>{planilhaAtual.nome || 'Planilha personalizada'}</h3>
-          <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>Planilha editável com linhas e colunas livres. Use as duas planilhas principais ou crie quantas planilhas extras quiser.</div>
+          <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>Planilha editável com linhas e colunas livres. Use as duas planilhas principais ou crie quantas planilhas extras quiser. Os dados ficam salvos neste navegador.</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button C={C} size="sm" icon={I.Plus} onClick={adicionarLinha}>Adicionar linha</Button>
@@ -2868,7 +2794,7 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
             </tr>
           </thead>
           <tbody>
-            {linhasFiltradasTabela.length === 0 ? <tr><td colSpan={(tabela.columns || []).length + 1} style={{ padding: 24, color: C.textSoft, textAlign: 'center' }}>Nenhuma linha. Clique em “Adicionar linha”.</td></tr> : linhasFiltradasTabela.map((row) => {
+            {linhasFiltradasTabela.length === 0 ? <tr><td colSpan={(tabela.columns || []).length + 1} style={{ padding: 24, color: C.textSoft, textAlign: 'center' }}>Nenhuma linha. Clique em “Adicionar linha”.</td></tr> : linhasFiltradasTabela.map((row, visibleIdx) => {
               const idxOriginal = (tabela.rows || []).indexOf(row);
               return <tr key={idxOriginal}>
                 {(tabela.columns || []).map((_, colIdx) => <td key={colIdx} style={{ padding: 6, borderBottom: `1px solid ${C.borderSoft}`, borderRight: `1px solid ${C.borderSoft}` }}>
@@ -2885,44 +2811,92 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
     <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}>
       <Button C={C} icon={I.Plus} onClick={() => { setShowForm(true); setEditing(null); setForm(itemVazio()); }}>Novo registro</Button>
       <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ ...inputStyle(C), maxWidth: 260, padding: '8px 12px' }}><option value="todos">Todos os formatos</option><option>Agente etiológico</option><option>Classe de antibiótico</option><option>Antibiótico específico</option></select>
-      <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Filtrar por título, agente, classe, antibiótico ou texto..." style={{ ...inputStyle(C), maxWidth: 420, padding: '8px 12px' }} />
+      <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar agente, classe, antibiótico..." style={{ ...inputStyle(C), maxWidth: 340, padding: '8px 12px' }} />
     </div>
-
     {showForm && <Card C={C} style={{ marginBottom: 16 }}>
       <h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Novo'} registro</h3>
-      <FormInput C={C} label="Título que aparecerá na lista" value={form.titulo || ''} onChange={v => setForm({...form, titulo: v})} />
+      <FormInput C={C} label="Título do registro" value={form.titulo || ''} onChange={v => setForm({...form, titulo: v})} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12 }}>
         <div><FormLabel C={C}>Tipo de organização</FormLabel><select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} style={inputStyle(C)}><option>Agente etiológico</option><option>Classe de antibiótico</option><option>Antibiótico específico</option></select></div>
         <FormInput C={C} label="Agente etiológico / microrganismo" value={form.agente} onChange={v => setForm({...form, agente: v})} />
         <FormInput C={C} label="Classe" value={form.classe} onChange={v => setForm({...form, classe: v})} />
         <FormInput C={C} label="Nome do antibiótico" value={form.antibiotico} onChange={v => setForm({...form, antibiotico: v})} />
       </div>
-      <FormLabel C={C} style={{ marginTop: 12 }}>Cobertura / espectro</FormLabel><RichTextEditor C={C} value={form.cobertura || ''} onChange={v => setForm({...form, cobertura: v})} minHeight={90} placeholder="Ex.: Gram positivos, Gram negativos, anaeróbios, Pseudomonas, MRSA..." />
-      <FormLabel C={C} style={{ marginTop: 12 }}>Resistências / não cobre</FormLabel><RichTextEditor C={C} value={form.resistencia || ''} onChange={v => setForm({...form, resistencia: v})} minHeight={80} placeholder="Ex.: não cobre MRSA, ESBL, KPC; resistência intrínseca..." />
+      <FormLabel C={C} style={{ marginTop: 12 }}>Cobertura / espectro</FormLabel><RichTextEditor C={C} value={form.cobertura} onChange={v => setForm({...form, cobertura: v})} minHeight={90} placeholder="Ex.: Gram positivos, Gram negativos, anaeróbios, Pseudomonas, MRSA..." />
+      <FormLabel C={C} style={{ marginTop: 12 }}>Resistências / não cobre</FormLabel><RichTextEditor C={C} value={form.resistencia} onChange={v => setForm({...form, resistencia: v})} minHeight={80} placeholder="Ex.: não cobre MRSA, ESBL, KPC; resistência intrínseca..." />
       <FormLabel C={C} style={{ marginTop: 12 }}>Mecanismo de ação</FormLabel><RichTextEditor C={C} value={form.mecanismoAcao || form.doseHabitual || ''} onChange={v => setForm({...form, mecanismoAcao: v})} minHeight={80} placeholder="Ex.: inibe síntese de parede celular; liga-se à subunidade 50S; inibe DNA girase/topoisomerase..." />
-      <FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova</FormLabel><RichTextEditor C={C} value={form.dicaProva || ''} onChange={v => setForm({...form, dicaProva: v})} minHeight={70} placeholder="Macete, pegadinha, cobertura que costuma cair ou confusão comum." />
-      <CustomSectionsEditor C={C} sections={form.secoesCustomizadas || []} onChange={secs => setForm({...form, secoesCustomizadas: secs})} label="Caixas de texto adicionais" />
-      <FormLabel C={C} style={{ marginTop: 12 }}>Observações</FormLabel><RichTextEditor C={C} value={form.observacoes || ''} onChange={v => setForm({...form, observacoes: v})} minHeight={70} />
-      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); setForm(itemVazio()); }}>Cancelar</Button></div>
+      <FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova</FormLabel><RichTextEditor C={C} value={form.dicaProva || ''} onChange={v => setForm({...form, dicaProva: v})} minHeight={70} placeholder="Macete, pegadinha, espectro que costuma cair ou ponto prático importante" />
+      <CustomSectionsEditor C={C} sections={form.secoesCustomizadas || []} onChange={secs => setForm({...form, secoesCustomizadas: secs})} label="Caixas de texto do antimicrobiano" />
+      <FormLabel C={C} style={{ marginTop: 12 }}>Observações gerais</FormLabel><RichTextEditor C={C} value={form.observacoes || ''} onChange={v => setForm({...form, observacoes: v})} minHeight={70} />
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div>
     </Card>}
-
-    {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Activity size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum registro cadastrado. Clique em “Novo registro”.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{filtrados.map(a => <Card key={a.id} C={C} hover onClick={() => setRegistroAberto(a.id)} style={{ padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}><Badge C={C}>{a.tipo}</Badge>{a.classe && <Badge C={C} color="soft">{a.classe}</Badge>}{a.agente && <Badge C={C} color="soft">{a.agente}</Badge>}</div>
-          <h4 className="lumen-serif" style={{ fontSize: 18, margin: 0, fontWeight: 500, color: C.text, lineHeight: 1.35 }}>{tituloRegistro(a)}</h4>
-        </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-          <button onClick={() => abrirEdicao(a)} style={{ padding: 7, borderRadius: 6, color: C.textSoft, background: C.bg, border: `1px solid ${C.borderSoft}`, display: 'flex' }} title="Editar"><I.Edit size={14} /></button>
-          <button onClick={() => excluir(a.id)} style={{ padding: 7, borderRadius: 6, color: C.error, background: C.bg, border: `1px solid ${C.error}30`, display: 'flex' }} title="Excluir"><I.Trash size={14} /></button>
-          <I.ChevR size={18} />
-        </div>
-      </div>
-    </Card>)}</div>}
+    {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Activity size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum registro cadastrado. Clique em “Novo registro”.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{filtrados.map(a => <AntimicrobianoCard key={a.id} a={a} C={C} onEdit={() => { setForm({ ...a, titulo: a.titulo || a.antibiotico || a.agente || a.classe || '', mecanismoAcao: a.mecanismoAcao || a.doseHabitual || '', secoesCustomizadas: a.secoesCustomizadas || [] }); setEditing(a.id); setShowForm(true); }} onDelete={() => excluir(a.id)} />)}</div>}
   </div>;
 }
 
+
+function AntimicrobianoCard({ a, C, onEdit, onDelete }) {
+  const [aberto, setAberto] = useState(false);
+  const titulo = a.titulo || a.antibiotico || a.agente || a.classe || 'Registro sem título';
+  const secoes = [
+    ['Agente etiológico / microrganismo', a.agente],
+    ['Classe', a.classe],
+    ['Antibiótico', a.antibiotico],
+    ['Cobertura / espectro', a.cobertura],
+    ['Resistências / não cobre', a.resistencia],
+    ['Mecanismo de ação', a.mecanismoAcao || a.doseHabitual],
+    ['Dica de prova', a.dicaProva],
+    ...((a.secoesCustomizadas || []).map(sec => [sec.titulo || 'Caixa de texto', sec.conteudo || ''])),
+    ['Observações gerais', a.observacoes]
+  ].filter(([, valor]) => plainText(valor || '').trim() || String(valor || '').trim());
+  return <Card C={C} style={{ padding: 0, overflow: 'hidden' }}>
+    <button onClick={() => setAberto(!aberto)} style={{ width: '100%', padding: 16, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', color: C.text }}>
+      <span style={{ color: C.accent }}><I.Activity size={18} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15.5, fontWeight: 800, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titulo}</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 5 }}><Badge C={C}>{a.tipo || 'Registro'}</Badge>{a.classe && <Badge C={C} color="soft">{a.classe}</Badge>}</div>
+      </div>
+      {aberto ? <I.ChevU size={16} /> : <I.ChevD size={16} />}
+    </button>
+    {aberto && <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${C.borderSoft}`, paddingTop: 14 }}>
+      {secoes.length === 0 ? <div style={{ fontSize: 13, color: C.textSoft }}>Sem texto cadastrado.</div> : secoes.map(([label, valor], idx) => <DetailRow key={idx} label={label} value={valor} C={C} html={true} highlight={label === 'Dica de prova' || label === 'Resistências / não cobre'} />)}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><Button C={C} variant="secondary" size="sm" icon={I.Edit} onClick={onEdit}>Editar</Button><Button C={C} variant="ghost" size="sm" icon={I.Trash} onClick={onDelete}>Deletar</Button></div>
+    </div>}
+  </Card>;
+}
+
 // ============= MEDICAMENTOS =============
+
+function AntimicrobianoCard({ a, C, onEdit, onDelete }) {
+  const [aberto, setAberto] = useState(false);
+  const titulo = a.titulo || a.antibiotico || a.agente || a.classe || 'Registro sem título';
+  const secoes = [
+    ['Agente etiológico / microrganismo', a.agente],
+    ['Classe', a.classe],
+    ['Antibiótico', a.antibiotico],
+    ['Cobertura / espectro', a.cobertura],
+    ['Resistências / não cobre', a.resistencia],
+    ['Mecanismo de ação', a.mecanismoAcao || a.doseHabitual],
+    ['Dica de prova', a.dicaProva],
+    ...((a.secoesCustomizadas || []).map(sec => [sec.titulo || 'Caixa de texto', sec.conteudo || ''])),
+    ['Observações gerais', a.observacoes]
+  ].filter(([, valor]) => plainText(valor || '').trim() || String(valor || '').trim());
+  return <Card C={C} style={{ padding: 0, overflow: 'hidden' }}>
+    <button onClick={() => setAberto(!aberto)} style={{ width: '100%', padding: 16, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', color: C.text }}>
+      <span style={{ color: C.accent }}><I.Activity size={18} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15.5, fontWeight: 800, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titulo}</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 5 }}><Badge C={C}>{a.tipo || 'Registro'}</Badge>{a.classe && <Badge C={C} color="soft">{a.classe}</Badge>}</div>
+      </div>
+      {aberto ? <I.ChevU size={16} /> : <I.ChevD size={16} />}
+    </button>
+    {aberto && <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${C.borderSoft}`, paddingTop: 14 }}>
+      {secoes.length === 0 ? <div style={{ fontSize: 13, color: C.textSoft }}>Sem texto cadastrado.</div> : secoes.map(([label, valor], idx) => <DetailRow key={idx} label={label} value={valor} C={C} html={true} highlight={label === 'Dica de prova' || label === 'Resistências / não cobre'} />)}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><Button C={C} variant="secondary" size="sm" icon={I.Edit} onClick={onEdit}>Editar</Button><Button C={C} variant="ghost" size="sm" icon={I.Trash} onClick={onDelete}>Deletar</Button></div>
+    </div>}
+  </Card>;
+}
+
 // ============= MEDICAMENTOS =============
 function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setProcedimentos, C }) {
   const [aba, setAba] = useState('prescricoes');
@@ -2941,13 +2915,16 @@ function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setPr
   const procedimentoVazio = () => ({ titulo: '', especialidade: 'outros', categoria: '', descricao: '', materiais: '', indicacoes: '', contraindicações: '', complicacoes: '', cuidados: '', dicaProva: '', tags: [], dataCriacao: new Date().toISOString() });
   const [procForm, setProcForm] = useState(procedimentoVazio());
 
-  const doencas = [...new Set(medicamentos
+  const listaMedicamentos = Array.isArray(medicamentos) ? medicamentos : [];
+  const listaProcedimentos = Array.isArray(procedimentos) ? procedimentos : [];
+
+  const doencas = [...new Set(listaMedicamentos
     .filter(m => filtroEsp === 'todas' || (m.especialidade || m.tema || 'outros') === filtroEsp)
     .map(m => m.doenca).filter(Boolean))].sort();
-  const especialidadesComQtd = ESPECIALIDADES.map(e => ({ ...e, qtd: medicamentos.filter(m => (m.especialidade || m.tema || 'outros') === e.id).length }));
-  const doencasPorEspecialidade = (espId) => [...new Set(medicamentos.filter(m => (m.especialidade || m.tema || 'outros') === espId).map(m => m.doenca).filter(Boolean))].sort();
+  const especialidadesComQtd = ESPECIALIDADES.map(e => ({ ...e, qtd: listaMedicamentos.filter(m => (m.especialidade || m.tema || 'outros') === e.id).length }));
+  const doencasPorEspecialidade = (espId) => [...new Set(listaMedicamentos.filter(m => (m.especialidade || m.tema || 'outros') === espId).map(m => m.doenca).filter(Boolean))].sort();
 
-  const filtrados = medicamentos.filter(m => {
+  const filtrados = listaMedicamentos.filter(m => {
     if (filtroCategoria !== 'todas' && m.categoria !== filtroCategoria) return false;
     if (filtroEsp !== 'todas' && (m.especialidade || m.tema || 'outros') !== filtroEsp) return false;
     if (filtroDoenca !== 'todas') {
@@ -2959,7 +2936,7 @@ function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setPr
     return true;
   });
 
-  const procedimentosFiltrados = (procedimentos || []).filter(p => {
+  const procedimentosFiltrados = listaProcedimentos.filter(p => {
     if (filtroEsp !== 'todas' && (p.especialidade || 'outros') !== filtroEsp) return false;
     const texto = `${p.titulo || ''} ${p.categoria || ''} ${plainText(p.descricao || '')} ${plainText(p.materiais || '')} ${plainText(p.indicacoes || '')} ${plainText(p.cuidados || '')} ${plainText(p.dicaProva || '')}`.toLowerCase();
     if (busca && !texto.includes(busca.toLowerCase())) return false;
@@ -2967,10 +2944,10 @@ function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setPr
   });
 
   const salvar = () => {
-    if (!form.nome.trim() && !form.doenca.trim() && !form.prescricao.trim()) return;
-    const item = { ...form, nome: form.nome.trim() || form.doenca.trim() || 'Prescrição sem nome' };
-    if (editing) setMedicamentos(medicamentos.map(m => m.id === editing ? { ...item, id: editing } : m));
-    else setMedicamentos([{ ...item, id: 'med-' + Date.now() }, ...medicamentos]);
+    if (!String(form.nome || '').trim() && !String(form.doenca || '').trim() && !plainText(form.prescricao || '').trim()) return;
+    const item = { ...form, nome: String(form.nome || '').trim() || String(form.doenca || '').trim() || 'Prescrição sem nome' };
+    if (editing) setMedicamentos(listaMedicamentos.map(m => m.id === editing ? { ...item, id: editing } : m));
+    else setMedicamentos([{ ...item, id: 'med-' + Date.now() }, ...listaMedicamentos]);
     setShowForm(false); setEditing(null); setForm(medVazio());
   };
 
@@ -2981,8 +2958,8 @@ function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setPr
   const salvarProcedimento = () => {
     if (!procForm.titulo.trim() && !plainText(procForm.descricao).trim()) return;
     const payload = { ...procForm, titulo: procForm.titulo.trim() || 'Procedimento sem título', atualizadoEm: new Date().toISOString() };
-    if (editingProc) setProcedimentos((procedimentos || []).map(p => p.id === editingProc ? { ...payload, id: editingProc } : p));
-    else setProcedimentos([{ ...payload, id: 'proc-' + Date.now() }, ...(procedimentos || [])]);
+    if (editingProc) setProcedimentos(listaProcedimentos.map(p => p.id === editingProc ? { ...payload, id: editingProc } : p));
+    else setProcedimentos([{ ...payload, id: 'proc-' + Date.now() }, ...listaProcedimentos]);
     setShowProcForm(false); setEditingProc(null); setProcForm(procedimentoVazio());
   };
 
@@ -3015,7 +2992,7 @@ function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setPr
             <select value={filtroDoenca} onChange={e => setFiltroDoenca(e.target.value)} style={{ ...inputStyle(C), maxWidth: 280, padding: '8px 12px' }}><option value="todas">Doenças e medicamentos mais utilizados</option><option value="__sem_doenca__">Medicamentos sem doença marcada</option>{doencas.map(d => <option key={d} value={d}>{d}</option>)}</select>
           </div>
           {showForm && <PrescricaoForm C={C} form={form} setForm={setForm} editing={editing} salvar={salvar} cancelar={() => { setShowForm(false); setEditing(null); }} />}
-          {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Pill size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhuma prescrição encontrada.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{filtrados.map(m => <MedCard key={m.id} m={m} C={C} onEdit={() => { setForm(m); setEditing(m.id); setShowForm(true); }} onDelete={() => { if (confirm('Deletar esta prescrição/medicação?')) setMedicamentos(medicamentos.filter(x => x.id !== m.id)); }} />)}</div>}
+          {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Pill size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhuma prescrição encontrada.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{filtrados.map(m => <MedCard key={m.id} m={m} C={C} onEdit={() => { setForm(m); setEditing(m.id); setShowForm(true); }} onDelete={() => { if (confirm('Deletar esta prescrição/medicação?')) setMedicamentos(listaMedicamentos.filter(x => x.id !== m.id)); }} />)}</div>}
         </>}
 
         {aba === 'procedimentos' && <>
@@ -3023,16 +3000,16 @@ function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setPr
             <select value={filtroEsp} onChange={e => setFiltroEsp(e.target.value)} style={{ ...inputStyle(C), maxWidth: 260, padding: '8px 12px' }}><option value="todas">Todas as especialidades</option>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select>
           </div>
           {showProcForm && <ProcedimentoForm C={C} form={procForm} setForm={setProcForm} editing={editingProc} salvar={salvarProcedimento} cancelar={() => { setShowProcForm(false); setEditingProc(null); }} />}
-          {procedimentosFiltrados.length === 0 && !showProcForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.File size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum procedimento cadastrado. Clique em “Novo procedimento”.</div><div style={{ fontSize: 12.5, color: C.textSoft, marginTop: 6 }}>Ex.: passagem de cateter venoso central, intubação orotraqueal, paracentese, toracocentese.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{procedimentosFiltrados.map(p => <ProcedimentoCard key={p.id} p={p} C={C} onEdit={() => { setProcForm(p); setEditingProc(p.id); setShowProcForm(true); }} onDelete={() => { if (confirm('Deletar este procedimento?')) setProcedimentos((procedimentos || []).filter(x => x.id !== p.id)); }} />)}</div>}
+          {procedimentosFiltrados.length === 0 && !showProcForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.File size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum procedimento cadastrado. Clique em “Novo procedimento”.</div><div style={{ fontSize: 12.5, color: C.textSoft, marginTop: 6 }}>Ex.: passagem de cateter venoso central, intubação orotraqueal, paracentese, toracocentese.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{procedimentosFiltrados.map(p => <ProcedimentoCard key={p.id} p={p} C={C} onEdit={() => { setProcForm(p); setEditingProc(p.id); setShowProcForm(true); }} onDelete={() => { if (confirm('Deletar este procedimento?')) setProcedimentos(listaProcedimentos.filter(x => x.id !== p.id)); }} />)}</div>}
         </>}
       </div>
 
       <Card C={C} style={{ position: 'sticky', top: 80, padding: sidebarOpen ? 16 : 10, maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }} className="lumen-scroll">
         <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ width: '100%', color: C.accent, fontWeight: 800, fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>{sidebarOpen ? 'Especialidades' : '☰'}{sidebarOpen && <I.ChevR size={14}/>}</button>
         {sidebarOpen && <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <button onClick={() => { setFiltroEsp('todas'); setFiltroDoenca('todas'); }} style={{ ...sideItemStyle(C, filtroEsp === 'todas'), justifyContent:'space-between' }}><span>Todas</span><span>{aba === 'prescricoes' ? medicamentos.length : (procedimentos || []).length}</span></button>
+          <button onClick={() => { setFiltroEsp('todas'); setFiltroDoenca('todas'); }} style={{ ...sideItemStyle(C, filtroEsp === 'todas'), justifyContent:'space-between' }}><span>Todas</span><span>{aba === 'prescricoes' ? listaMedicamentos.length : listaProcedimentos.length}</span></button>
           {especialidadesComQtd.map(e => {
-            const qtdProcedimentos = (procedimentos || []).filter(p => (p.especialidade || 'outros') === e.id).length;
+            const qtdProcedimentos = listaProcedimentos.filter(p => (p.especialidade || 'outros') === e.id).length;
             return <div key={e.id}>
               <button onClick={() => { setFiltroEsp(e.id); setFiltroDoenca('todas'); }} style={{ ...sideItemStyle(C, filtroEsp === e.id), justifyContent:'space-between' }}><span>{e.nome}</span><span>{aba === 'prescricoes' ? e.qtd : qtdProcedimentos}</span></button>
               {aba === 'prescricoes' && filtroEsp === e.id && <div style={{ marginLeft: 10, marginTop: 4, display:'flex', flexDirection:'column', gap:4 }}>{doencasPorEspecialidade(e.id).map(d => <button key={d} onClick={() => setFiltroDoenca(d)} style={{ ...sideItemStyle(C, filtroDoenca === d), fontSize: 12, padding:'7px 9px' }}>↳ {d}</button>)}<button onClick={() => abrirNovaPrescricao(e.id, '')} style={{ ...sideItemStyle(C, false), fontSize: 12, padding:'7px 9px', color:C.accent }}>+ Medicamento sem doença</button><button onClick={() => { const d = prompt('Nome da doença/grupo:'); if (d) abrirNovaPrescricao(e.id, d); }} style={{ ...sideItemStyle(C, false), fontSize: 12, padding:'7px 9px', color:C.accent }}>+ Nova doença/grupo</button></div>}
