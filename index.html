@@ -91,6 +91,15 @@
   }
 </script>
 
+
+<script>
+  window.addEventListener('error', function(event) {
+    var loader = document.getElementById('initial-loader');
+    if (loader) {
+      loader.innerHTML = '<div style="max-width:760px;padding:24px;color:#b85450;font-family:Manrope,Arial,sans-serif;text-align:left"><strong>Erro ao abrir o Lúmen.</strong><br/><br/><span style="color:#6b5d4a">Detalhe técnico: ' + String(event.message || 'erro desconhecido').replace(/</g, '&lt;') + '</span></div>';
+    }
+  });
+</script>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useMemo, useRef } = React;
 
@@ -2835,36 +2844,6 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
 }
 
 
-function AntimicrobianoCard({ a, C, onEdit, onDelete }) {
-  const [aberto, setAberto] = useState(false);
-  const titulo = a.titulo || a.antibiotico || a.agente || a.classe || 'Registro sem título';
-  const secoes = [
-    ['Agente etiológico / microrganismo', a.agente],
-    ['Classe', a.classe],
-    ['Antibiótico', a.antibiotico],
-    ['Cobertura / espectro', a.cobertura],
-    ['Resistências / não cobre', a.resistencia],
-    ['Mecanismo de ação', a.mecanismoAcao || a.doseHabitual],
-    ['Dica de prova', a.dicaProva],
-    ...((a.secoesCustomizadas || []).map(sec => [sec.titulo || 'Caixa de texto', sec.conteudo || ''])),
-    ['Observações gerais', a.observacoes]
-  ].filter(([, valor]) => plainText(valor || '').trim() || String(valor || '').trim());
-  return <Card C={C} style={{ padding: 0, overflow: 'hidden' }}>
-    <button onClick={() => setAberto(!aberto)} style={{ width: '100%', padding: 16, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', color: C.text }}>
-      <span style={{ color: C.accent }}><I.Activity size={18} /></span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 15.5, fontWeight: 800, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titulo}</div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 5 }}><Badge C={C}>{a.tipo || 'Registro'}</Badge>{a.classe && <Badge C={C} color="soft">{a.classe}</Badge>}</div>
-      </div>
-      {aberto ? <I.ChevU size={16} /> : <I.ChevD size={16} />}
-    </button>
-    {aberto && <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${C.borderSoft}`, paddingTop: 14 }}>
-      {secoes.length === 0 ? <div style={{ fontSize: 13, color: C.textSoft }}>Sem texto cadastrado.</div> : secoes.map(([label, valor], idx) => <DetailRow key={idx} label={label} value={valor} C={C} html={true} highlight={label === 'Dica de prova' || label === 'Resistências / não cobre'} />)}
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}><Button C={C} variant="secondary" size="sm" icon={I.Edit} onClick={onEdit}>Editar</Button><Button C={C} variant="ghost" size="sm" icon={I.Trash} onClick={onDelete}>Deletar</Button></div>
-    </div>}
-  </Card>;
-}
-
 // ============= MEDICAMENTOS =============
 
 function AntimicrobianoCard({ a, C, onEdit, onDelete }) {
@@ -2898,7 +2877,7 @@ function AntimicrobianoCard({ a, C, onEdit, onDelete }) {
 }
 
 // ============= MEDICAMENTOS =============
-function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setProcedimentos, C }) {
+function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setProcedimentos = () => {}, C }) {
   const [aba, setAba] = useState('prescricoes');
   const [filtroCategoria, setFiltroCategoria] = useState('todas');
   const [filtroEsp, setFiltroEsp] = useState('todas');
@@ -2912,7 +2891,7 @@ function Medicamentos({ medicamentos, setMedicamentos, procedimentos = [], setPr
 
   const [showProcForm, setShowProcForm] = useState(false);
   const [editingProc, setEditingProc] = useState(null);
-  const procedimentoVazio = () => ({ titulo: '', especialidade: 'outros', categoria: '', descricao: '', materiais: '', indicacoes: '', contraindicações: '', complicacoes: '', cuidados: '', dicaProva: '', tags: [], dataCriacao: new Date().toISOString() });
+  const procedimentoVazio = () => ({ titulo: '', especialidade: 'outros', categoria: '', descricao: '', materiais: '', indicacoes: '', contraindicacoes: '', complicacoes: '', cuidados: '', dicaProva: '', tags: [], dataCriacao: new Date().toISOString() });
   const [procForm, setProcForm] = useState(procedimentoVazio());
 
   const listaMedicamentos = Array.isArray(medicamentos) ? medicamentos : [];
@@ -3051,7 +3030,7 @@ function ProcedimentoForm({ C, form, setForm, editing, salvar, cancelar }) {
     <FormLabel C={C} style={{ marginTop: 12 }}>Descrição do procedimento</FormLabel><RichTextEditor C={C} value={form.descricao || ''} onChange={v => setForm({...form, descricao:v})} minHeight={150} placeholder="Descreva a técnica, passo a passo e texto para prontuário..." />
     <FormLabel C={C} style={{ marginTop: 12 }}>Materiais</FormLabel><RichTextEditor C={C} value={form.materiais || ''} onChange={v => setForm({...form, materiais:v})} minHeight={80} />
     <FormLabel C={C} style={{ marginTop: 12 }}>Indicações</FormLabel><RichTextEditor C={C} value={form.indicacoes || ''} onChange={v => setForm({...form, indicacoes:v})} minHeight={80} />
-    <FormLabel C={C} style={{ marginTop: 12 }}>Contraindicações / cautelas</FormLabel><RichTextEditor C={C} value={form.contraindicacoes || form['contraindicações'] || ''} onChange={v => setForm({...form, contraindicacoes:v})} minHeight={70} />
+    <FormLabel C={C} style={{ marginTop: 12 }}>Contraindicações / cautelas</FormLabel><RichTextEditor C={C} value={form.contraindicacoes || ''} onChange={v => setForm({...form, contraindicacoes:v})} minHeight={70} />
     <FormLabel C={C} style={{ marginTop: 12 }}>Complicações</FormLabel><RichTextEditor C={C} value={form.complicacoes || ''} onChange={v => setForm({...form, complicacoes:v})} minHeight={70} />
     <FormLabel C={C} style={{ marginTop: 12 }}>Cuidados pós-procedimento</FormLabel><RichTextEditor C={C} value={form.cuidados || ''} onChange={v => setForm({...form, cuidados:v})} minHeight={80} />
     <FormLabel C={C} style={{ marginTop: 12 }}>Dica de prova</FormLabel><RichTextEditor C={C} value={form.dicaProva || ''} onChange={v => setForm({...form, dicaProva:v})} minHeight={70} placeholder="Macete, cuidado que cai em prova ou ponto prático importante" />
@@ -3074,7 +3053,7 @@ function ProcedimentoCard({ p, C, onEdit, onDelete }) {
       <DetailRow label="Descrição do procedimento" value={p.descricao} C={C} html highlight />
       <DetailRow label="Materiais" value={p.materiais} C={C} html />
       <DetailRow label="Indicações" value={p.indicacoes} C={C} html />
-      <DetailRow label="Contraindicações / cautelas" value={p.contraindicacoes || p['contraindicações']} C={C} html />
+      <DetailRow label="Contraindicações / cautelas" value={p.contraindicacoes} C={C} html />
       <DetailRow label="Complicações" value={p.complicacoes} C={C} html />
       <DetailRow label="Cuidados pós-procedimento" value={p.cuidados} C={C} html />
       <DetailRow label="Dica de prova" value={p.dicaProva} C={C} html highlight />
@@ -3210,9 +3189,13 @@ function EquivalenciasClinicas({ C }) {
 
 
 // ============= RENDER =============
-// ============= RENDER =============
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+const rootElement = document.getElementById('root');
+if (ReactDOM.createRoot) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(<App />);
+} else {
+  ReactDOM.render(<App />, rootElement);
+}
 </script>
 </body>
 </html>
