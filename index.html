@@ -2919,7 +2919,22 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
 // ============= MEDICAMENTOS =============
 
 function Medicamentos({ medicamentos, setMedicamentos, C }) {
-  const medFormVazio = (esp = 'infecto', doenca = '') => ({ nome: '', classe: '', categoria: doenca ? 'Prescrições por doença' : '', especialidade: esp, doenca: doenca || '', prescricao: '', indicacao: '', dose: '', diluicao: '', velocidade: '', doseMax: '', ajusteRenal: '', cuidados: '', obs: '', tags: [] });
+  const novoId = (prefixo) => `${prefixo}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const tratamentoVazio = () => ({
+    id: novoId('trat'),
+    titulo: 'Opção de tratamento',
+    contexto: '',
+    antibioticos: [antibioticoVazio()]
+  });
+  function antibioticoVazio() {
+    return { id: novoId('atb'), nome: '', dose: '', diluicao: '', infusao: '', intervalo: '', ajusteRenal: '', observacoes: '' };
+  }
+  const medFormVazio = (esp = 'infecto', doenca = '') => ({
+    nome: '', classe: '', categoria: doenca ? 'Prescrições por doença' : '', especialidade: esp,
+    doenca: doenca || '', prescricao: '', indicacao: '', indicacoesRelacionadas: [],
+    dose: '', diluicao: '', velocidade: '', doseMax: '', ajusteRenal: '', cuidados: '', obs: '', tags: [],
+    esquemasTratamento: doenca ? [tratamentoVazio()] : []
+  });
   const procFormVazio = () => ({ titulo: '', especialidade: 'infecto', categoria: '', descricao: '', dica: '', caixasTexto: [] });
 
   const [abaMedicamentos, setAbaMedicamentos] = useState('medicamentos');
@@ -2948,6 +2963,30 @@ function Medicamentos({ medicamentos, setMedicamentos, C }) {
   }, []);
   useEffect(() => { storage.set('lumen_procedimentos', procedimentos); }, [procedimentos]);
 
+  const normalizarIndicacoes = (valor) => {
+    if (Array.isArray(valor)) return valor.map(v => String(v || '').trim()).filter(Boolean);
+    return String(valor || '').split(/\n|;/).map(v => v.trim()).filter(Boolean);
+  };
+  const normalizarEsquemas = (m) => {
+    const esquemas = Array.isArray(m.esquemasTratamento) ? m.esquemasTratamento : [];
+    return esquemas.map(esq => ({
+      ...esq,
+      id: esq.id || novoId('trat'),
+      titulo: esq.titulo || 'Opção de tratamento',
+      antibioticos: Array.isArray(esq.antibioticos) && esq.antibioticos.length ? esq.antibioticos.map(a => ({ ...antibioticoVazio(), ...a, id: a.id || novoId('atb') })) : []
+    }));
+  };
+  const abrirItemParaEdicao = (m) => {
+    setForm({
+      ...medFormVazio(m.especialidade || m.tema || 'infecto', m.doenca || ''),
+      ...m,
+      indicacoesRelacionadas: normalizarIndicacoes(m.indicacoesRelacionadas || m.indicacoes || ''),
+      esquemasTratamento: normalizarEsquemas(m)
+    });
+    setEditing(m.id);
+    setShowForm(true);
+  };
+
   const doencas = [...new Set(medicamentos
     .filter(m => filtroEsp === 'todas' || (m.especialidade || m.tema || 'outros') === filtroEsp)
     .map(m => m.doenca).filter(Boolean))].sort();
@@ -2961,7 +3000,8 @@ function Medicamentos({ medicamentos, setMedicamentos, C }) {
       if (filtroDoenca === '__sem_doenca__') { if (m.doenca) return false; }
       else if ((m.doenca || '') !== filtroDoenca) return false;
     }
-    const texto = `${m.nome} ${m.classe || ''} ${m.categoria || ''} ${m.indicacao || ''} ${m.doenca || ''} ${m.prescricao || ''}`.toLowerCase();
+    const esquemasTxt = (m.esquemasTratamento || []).flatMap(e => [e.titulo, e.contexto, ...(e.antibioticos || []).flatMap(a => [a.nome, a.dose, a.diluicao, a.infusao, a.intervalo, a.observacoes])]).join(' ');
+    const texto = `${m.nome} ${m.classe || ''} ${m.categoria || ''} ${m.indicacao || ''} ${(m.indicacoesRelacionadas || []).join(' ')} ${m.doenca || ''} ${m.prescricao || ''} ${esquemasTxt}`.toLowerCase();
     if (busca && !texto.includes(busca.toLowerCase())) return false;
     return true;
   });
@@ -2970,18 +3010,22 @@ function Medicamentos({ medicamentos, setMedicamentos, C }) {
     if (filtroProcEsp !== 'todas' && (p.especialidade || 'outros') !== filtroProcEsp) return false;
     const q = buscaProc.toLowerCase().trim();
     if (!q) return true;
-    const texto = [
-      p.titulo, p.categoria, p.descricao, p.dica,
-      ...((p.caixasTexto || []).flatMap(sec => [sec.titulo, sec.conteudo]))
-    ].join(' ').toLowerCase();
+    const texto = [p.titulo, p.categoria, p.descricao, p.dica, ...((p.caixasTexto || []).flatMap(sec => [sec.titulo, sec.conteudo]))].join(' ').toLowerCase();
     return texto.includes(q);
   });
 
   const salvar = () => {
-    if (!form.nome.trim() && !form.doenca.trim() && !form.prescricao.trim()) return;
-    const item = { ...form, nome: form.nome.trim() || form.doenca.trim() || 'Prescrição sem nome' };
+    if (!form.nome.trim() && !form.doenca.trim() && !plainText(form.prescricao || '').trim()) return;
+    const item = {
+      ...form,
+      nome: form.nome.trim() || form.doenca.trim() || 'Prescrição sem nome',
+      categoria: form.doenca ? (form.categoria || 'Prescrições por doença') : (form.categoria || ''),
+      indicacoesRelacionadas: normalizarIndicacoes(form.indicacoesRelacionadas),
+      esquemasTratamento: normalizarEsquemas(form),
+      atualizadoEm: new Date().toISOString()
+    };
     if (editing) setMedicamentos(medicamentos.map(m => m.id === editing ? { ...item, id: editing } : m));
-    else setMedicamentos([{ ...item, id: 'med-' + Date.now() }, ...medicamentos]);
+    else setMedicamentos([{ ...item, id: novoId('med') }, ...medicamentos]);
     setShowForm(false); setEditing(null);
     setForm(medFormVazio(filtroEsp !== 'todas' ? filtroEsp : 'infecto', filtroDoenca !== 'todas' && filtroDoenca !== '__sem_doenca__' ? filtroDoenca : ''));
   };
@@ -2995,7 +3039,7 @@ function Medicamentos({ medicamentos, setMedicamentos, C }) {
     if (!procForm.titulo.trim() && !plainText(procForm.descricao || '').trim()) return alert('Preencha pelo menos o título ou a descrição do procedimento.');
     const item = { ...procForm, titulo: procForm.titulo.trim() || 'Procedimento sem título', atualizadoEm: new Date().toISOString() };
     if (editingProc) setProcedimentos(procedimentos.map(p => p.id === editingProc ? { ...item, id: editingProc } : p));
-    else setProcedimentos([{ ...item, id: 'proc-' + Date.now() }, ...procedimentos]);
+    else setProcedimentos([{ ...item, id: novoId('proc') }, ...procedimentos]);
     setShowProcForm(false); setEditingProc(null); setProcForm(procFormVazio());
   };
 
@@ -3055,7 +3099,7 @@ function Medicamentos({ medicamentos, setMedicamentos, C }) {
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           <Button C={C} icon={I.Plus} onClick={() => abrirNovaPrescricao()}>Nova medicação/prescrição</Button>
-          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por droga, doença ou prescrição..." style={{ ...inputStyle(C), maxWidth: 320, padding: '8px 12px' }} />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por droga, doença, indicação ou prescrição..." style={{ ...inputStyle(C), maxWidth: 360, padding: '8px 12px' }} />
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}><button onClick={() => setFiltroCategoria('todas')} style={pillStyle(C, filtroCategoria === 'todas')}>Todas categorias</button>{CATEGORIAS_MED.map(c => <button key={c} onClick={() => setFiltroCategoria(c)} style={pillStyle(C, filtroCategoria === c)}>{c}</button>)}</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
@@ -3063,8 +3107,42 @@ function Medicamentos({ medicamentos, setMedicamentos, C }) {
           <select value={filtroDoenca} onChange={e => setFiltroDoenca(e.target.value)} style={{ ...inputStyle(C), maxWidth: 260, padding: '8px 12px' }}><option value="todas">Doenças e medicamentos mais utilizados</option><option value="__sem_doenca__">Medicamentos mais utilizados</option>{doencas.map(d => <option key={d}>{d}</option>)}</select>
         </div>
 
-        {showForm && <Card C={C} style={{ marginBottom: 16 }}><h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Nova'} medicação/prescrição</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}><FormInput C={C} label="Nome da medicação/prescrição" value={form.nome} onChange={v => setForm({...form, nome: v})} /><FormInput C={C} label="Classe" value={form.classe} onChange={v => setForm({...form, classe: v})} /><div><FormLabel C={C}>Categoria</FormLabel><select value={form.categoria || ''} onChange={e => setForm({...form, categoria: e.target.value})} style={inputStyle(C)}><option value="">Sem categoria</option>{CATEGORIAS_MED.map(c => <option key={c}>{c}</option>)}</select></div><div><FormLabel C={C}>Especialidade</FormLabel><select value={form.especialidade || 'infecto'} onChange={e => setForm({...form, especialidade: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div><FormInput C={C} label="Doença/condição (opcional; deixe vazio para medicamentos mais utilizados)" value={form.doenca || ''} onChange={v => setForm({...form, doenca: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Prescrição / medicamentos mais utilizados</FormLabel><RichTextEditor C={C} value={form.prescricao || ''} onChange={v => setForm({...form, prescricao: v})} minHeight={110} placeholder="Ex.: Pneumonia comunitária: ceftriaxona + azitromicina..." /><FormLabel C={C} style={{ marginTop: 12 }}>Indicação</FormLabel><RichTextEditor C={C} value={form.indicacao} onChange={v => setForm({...form, indicacao: v})} minHeight={60} /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12 }}><FormInput C={C} label="Dose usual" value={form.dose} onChange={v => setForm({...form, dose: v})} /><FormInput C={C} label="Dose máxima" value={form.doseMax} onChange={v => setForm({...form, doseMax: v})} /><FormInput C={C} label="Ajuste renal" value={form.ajusteRenal} onChange={v => setForm({...form, ajusteRenal: v})} /></div><FormLabel C={C} style={{ marginTop: 12 }}>Diluição</FormLabel><RichTextEditor C={C} value={form.diluicao} onChange={v => setForm({...form, diluicao: v})} minHeight={60} /><FormLabel C={C} style={{ marginTop: 12 }}>Velocidade de infusão</FormLabel><RichTextEditor C={C} value={form.velocidade} onChange={v => setForm({...form, velocidade: v})} minHeight={55} /><FormLabel C={C} style={{ marginTop: 12 }}>Cuidados e contraindicações</FormLabel><RichTextEditor C={C} value={form.cuidados} onChange={v => setForm({...form, cuidados: v})} minHeight={70} /><FormLabel C={C} style={{ marginTop: 12 }}>Observações</FormLabel><RichTextEditor C={C} value={form.obs} onChange={v => setForm({...form, obs: v})} minHeight={60} /><div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div></Card>}
-        {filtrados.length === 0 ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Pill size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum medicamento/prescrição com esses filtros.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{filtrados.map(m => <MedCard key={m.id} m={m} C={C} onEdit={() => { setForm({...m, especialidade: m.especialidade || m.tema || 'infecto'}); setEditing(m.id); setShowForm(true); }} onDelete={() => { if (confirm('Deletar?')) setMedicamentos(medicamentos.filter(x => x.id !== m.id)); }} />)}</div>}
+        {showForm && <Card C={C} style={{ marginBottom: 16 }}>
+          <h3 className="lumen-serif" style={{ fontSize: 18, margin: '0 0 14px' }}>{editing ? 'Editar' : 'Nova'} medicação/prescrição</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            <FormInput C={C} label="Nome da medicação/prescrição" value={form.nome} onChange={v => setForm({...form, nome: v})} />
+            <FormInput C={C} label="Classe" value={form.classe} onChange={v => setForm({...form, classe: v})} />
+            <div><FormLabel C={C}>Categoria</FormLabel><select value={form.categoria || ''} onChange={e => setForm({...form, categoria: e.target.value})} style={inputStyle(C)}><option value="">Sem categoria</option>{CATEGORIAS_MED.map(c => <option key={c}>{c}</option>)}</select></div>
+            <div><FormLabel C={C}>Especialidade</FormLabel><select value={form.especialidade || 'infecto'} onChange={e => setForm({...form, especialidade: e.target.value})} style={inputStyle(C)}>{ESPECIALIDADES.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></div>
+            <FormInput C={C} label="Doença/condição vinculada" value={form.doenca || ''} onChange={v => setForm({...form, doenca: v, categoria: v ? 'Prescrições por doença' : form.categoria, esquemasTratamento: v && (!form.esquemasTratamento || form.esquemasTratamento.length === 0) ? [tratamentoVazio()] : (form.esquemasTratamento || [])})} />
+          </div>
+
+          {!form.doenca && <div style={{ marginTop: 12 }}>
+            <FormLabel C={C}>Indicações/doenças em que uso este medicamento</FormLabel>
+            <textarea value={normalizarIndicacoes(form.indicacoesRelacionadas).join('\n')} onChange={e => setForm({...form, indicacoesRelacionadas: e.target.value})} placeholder="Uma indicação por linha. Ex.: Pneumonia hospitalar, ITU complicada, neutropenia febril..." style={{ ...inputStyle(C), minHeight: 78 }} />
+            <div style={{ fontSize: 11.5, color: C.textSoft, marginTop: 5 }}>Essas indicações aparecem no card do medicamento e também ajudam na busca.</div>
+          </div>}
+
+          <FormLabel C={C} style={{ marginTop: 12 }}>Prescrição favorita / texto livre</FormLabel>
+          <RichTextEditor C={C} value={form.prescricao || ''} onChange={v => setForm({...form, prescricao: v})} minHeight={100} placeholder="Ex.: Ceftriaxona 2 g EV 24/24h + Azitromicina 500 mg EV/VO 24/24h..." />
+
+          {form.doenca && <TreatmentSchemesEditor C={C} esquemas={form.esquemasTratamento || []} onChange={esquemas => setForm({...form, esquemasTratamento: esquemas})} novoId={novoId} antibioticoVazio={antibioticoVazio} />}
+
+          <FormLabel C={C} style={{ marginTop: 12 }}>Indicação / observação clínica</FormLabel>
+          <RichTextEditor C={C} value={form.indicacao || ''} onChange={v => setForm({...form, indicacao: v})} minHeight={60} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12 }}>
+            <FormInput C={C} label="Dose usual" value={form.dose || ''} onChange={v => setForm({...form, dose: v})} />
+            <FormInput C={C} label="Dose máxima" value={form.doseMax || ''} onChange={v => setForm({...form, doseMax: v})} />
+            <FormInput C={C} label="Ajuste renal" value={form.ajusteRenal || ''} onChange={v => setForm({...form, ajusteRenal: v})} />
+          </div>
+          <FormLabel C={C} style={{ marginTop: 12 }}>Diluição</FormLabel><RichTextEditor C={C} value={form.diluicao || ''} onChange={v => setForm({...form, diluicao: v})} minHeight={60} />
+          <FormLabel C={C} style={{ marginTop: 12 }}>Velocidade de infusão</FormLabel><RichTextEditor C={C} value={form.velocidade || ''} onChange={v => setForm({...form, velocidade: v})} minHeight={55} />
+          <FormLabel C={C} style={{ marginTop: 12 }}>Cuidados e contraindicações</FormLabel><RichTextEditor C={C} value={form.cuidados || ''} onChange={v => setForm({...form, cuidados: v})} minHeight={70} />
+          <FormLabel C={C} style={{ marginTop: 12 }}>Observações</FormLabel><RichTextEditor C={C} value={form.obs || ''} onChange={v => setForm({...form, obs: v})} minHeight={60} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div>
+        </Card>}
+
+        {filtrados.length === 0 ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Pill size={32} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum medicamento/prescrição com esses filtros.</div></Card> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{filtrados.map(m => <MedCard key={m.id} m={m} allMeds={medicamentos} C={C} onEdit={() => abrirItemParaEdicao(m)} onDelete={() => { if (confirm('Deletar?')) setMedicamentos(medicamentos.filter(x => x.id !== m.id)); }} />)}</div>}
       </div>
 
       <aside style={{ position: 'sticky', top: 82, alignSelf: 'start' }}>
@@ -3085,6 +3163,50 @@ function Medicamentos({ medicamentos, setMedicamentos, C }) {
           </div>}
         </Card>
       </aside>
+    </div>}
+  </div>;
+}
+
+function TreatmentSchemesEditor({ C, esquemas = [], onChange, novoId, antibioticoVazio }) {
+  const lista = Array.isArray(esquemas) ? esquemas : [];
+  const atualizarEsquema = (idx, campo, valor) => onChange(lista.map((e, i) => i === idx ? { ...e, [campo]: valor } : e));
+  const adicionarEsquema = () => onChange([...lista, { id: novoId('trat'), titulo: `Opção ${lista.length + 1}`, contexto: '', antibioticos: [antibioticoVazio()] }]);
+  const removerEsquema = (idx) => onChange(lista.filter((_, i) => i !== idx));
+  const atualizarAtb = (idxEsq, idxAtb, campo, valor) => onChange(lista.map((e, i) => i !== idxEsq ? e : { ...e, antibioticos: (e.antibioticos || []).map((a, j) => j === idxAtb ? { ...a, [campo]: valor } : a) }));
+  const adicionarAtb = (idxEsq) => onChange(lista.map((e, i) => i === idxEsq ? { ...e, antibioticos: [...(e.antibioticos || []), antibioticoVazio()] } : e));
+  const removerAtb = (idxEsq, idxAtb) => onChange(lista.map((e, i) => i === idxEsq ? { ...e, antibioticos: (e.antibioticos || []).filter((_, j) => j !== idxAtb) } : e));
+
+  return <div style={{ marginTop: 14, padding: 12, borderRadius: 10, border: `1px dashed ${C.border}`, background: C.bg }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+      <div>
+        <FormLabel C={C} style={{ marginBottom: 2 }}>Opções de tratamento da doença</FormLabel>
+        <div style={{ fontSize: 11.5, color: C.textSoft }}>Use uma opção para cada esquema possível: enfermaria, grave/UTI, alergia, ajuste renal etc.</div>
+      </div>
+      <Button C={C} size="sm" variant="secondary" icon={I.Plus} onClick={adicionarEsquema}>Adicionar opção de tratamento</Button>
+    </div>
+    {lista.length === 0 ? <div style={{ fontSize: 12, color: C.textSoft }}>Nenhuma opção cadastrada.</div> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {lista.map((esq, idxEsq) => <div key={esq.id || idxEsq} style={{ padding: 12, borderRadius: 10, background: C.card, border: `1px solid ${C.borderSoft}` }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <input value={esq.titulo || ''} onChange={e => atualizarEsquema(idxEsq, 'titulo', e.target.value)} placeholder="Ex.: Opção 1 — PAC enfermaria; Opção 2 — grave/UTI" style={{ ...inputStyle(C), padding: '8px 10px', fontWeight: 700 }} />
+          <button title="Excluir opção" onClick={() => removerEsquema(idxEsq)} style={{ color: C.error, padding: 8, display: 'flex' }}><I.Trash size={14} /></button>
+        </div>
+        <textarea value={esq.contexto || ''} onChange={e => atualizarEsquema(idxEsq, 'contexto', e.target.value)} placeholder="Quando usar esta opção? Ex.: paciente grave, alergia, foco abdominal, risco de Pseudomonas..." style={{ ...inputStyle(C), minHeight: 52, marginBottom: 10 }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(esq.antibioticos || []).map((atb, idxAtb) => <div key={atb.id || idxAtb} style={{ padding: 10, borderRadius: 8, background: C.bg, border: `1px solid ${C.borderSoft}` }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr)) 34px', gap: 8, alignItems: 'start' }}>
+              <input value={atb.nome || ''} onChange={e => atualizarAtb(idxEsq, idxAtb, 'nome', e.target.value)} placeholder="Antibiótico" style={{ ...inputStyle(C), padding: '7px 8px' }} />
+              <input value={atb.dose || ''} onChange={e => atualizarAtb(idxEsq, idxAtb, 'dose', e.target.value)} placeholder="Dose" style={{ ...inputStyle(C), padding: '7px 8px' }} />
+              <input value={atb.intervalo || ''} onChange={e => atualizarAtb(idxEsq, idxAtb, 'intervalo', e.target.value)} placeholder="Intervalo" style={{ ...inputStyle(C), padding: '7px 8px' }} />
+              <input value={atb.diluicao || ''} onChange={e => atualizarAtb(idxEsq, idxAtb, 'diluicao', e.target.value)} placeholder="Diluição" style={{ ...inputStyle(C), padding: '7px 8px' }} />
+              <input value={atb.infusao || ''} onChange={e => atualizarAtb(idxEsq, idxAtb, 'infusao', e.target.value)} placeholder="Infusão" style={{ ...inputStyle(C), padding: '7px 8px' }} />
+              <input value={atb.ajusteRenal || ''} onChange={e => atualizarAtb(idxEsq, idxAtb, 'ajusteRenal', e.target.value)} placeholder="Ajuste renal" style={{ ...inputStyle(C), padding: '7px 8px' }} />
+              <button title="Excluir antibiótico" onClick={() => removerAtb(idxEsq, idxAtb)} style={{ color: C.error, padding: 8, display: 'flex' }}><I.X size={14} /></button>
+            </div>
+            <textarea value={atb.observacoes || ''} onChange={e => atualizarAtb(idxEsq, idxAtb, 'observacoes', e.target.value)} placeholder="Observações deste antibiótico" style={{ ...inputStyle(C), minHeight: 42, marginTop: 8 }} />
+          </div>)}
+        </div>
+        <Button C={C} size="sm" variant="secondary" icon={I.Plus} onClick={() => adicionarAtb(idxEsq)} style={{ marginTop: 8 }}>Adicionar antibiótico</Button>
+      </div>)}
     </div>}
   </div>;
 }
@@ -3149,8 +3271,12 @@ const pillStyle = (C, active) => ({
   border: `1.5px solid ${active ? C.accent : C.border}`
 });
 
-function MedCard({ m, C, onEdit, onDelete }) {
+function MedCard({ m, allMeds = [], C, onEdit, onDelete }) {
   const [aberto, setAberto] = useState(false);
+  const esp = ESPECIALIDADES.find(t => t.id === (m.especialidade || m.tema || 'outros'));
+  const indicacoesRelacionadas = Array.isArray(m.indicacoesRelacionadas) ? m.indicacoesRelacionadas : String(m.indicacoesRelacionadas || '').split(/\n|;/).map(x => x.trim()).filter(Boolean);
+  const nomeMed = String(m.nome || '').trim().toLowerCase();
+  const doencasConectadas = !m.doenca && nomeMed ? [...new Set(allMeds.filter(item => item.doenca && (item.esquemasTratamento || []).some(esq => (esq.antibioticos || []).some(atb => String(atb.nome || '').trim().toLowerCase() === nomeMed))).map(item => item.doenca))] : [];
   return (
     <Card C={C} style={{ padding: 0, overflow: 'hidden' }}>
       <button onClick={() => setAberto(!aberto)} style={{
@@ -3161,24 +3287,27 @@ function MedCard({ m, C, onEdit, onDelete }) {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{m.nome}</div>
           <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-            {[m.classe, m.doenca ? m.categoria : '', m.doenca].filter(Boolean).join(' • ')}
+            {[esp?.nome, m.classe, m.doenca || 'Medicamentos mais utilizados'].filter(Boolean).join(' • ')}
           </div>
         </div>
         {aberto ? <I.ChevU size={16} /> : <I.ChevD size={16} />}
       </button>
       {aberto && (
         <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${C.borderSoft}`, paddingTop: 14 }}>
-          <DetailRow label="Especialidade" value={(ESPECIALIDADES.find(t => t.id === (m.especialidade || m.tema)) || {}).nome} C={C} />
+          <DetailRow label="Especialidade" value={esp?.nome} C={C} />
           <DetailRow label="Grupo" value={m.doenca || 'Medicamentos mais utilizados'} C={C} />
-          <DetailRow label="Prescrição favorita" value={m.prescricao} C={C} highlight />
-          <DetailRow label="Indicação" value={m.indicacao} C={C} />
+          <DetailHtmlRow label="Prescrição favorita" value={m.prescricao} C={C} highlight />
+          <TreatmentSchemesView C={C} esquemas={m.esquemasTratamento || []} />
+          <IndicationTags C={C} titulo="Indicações cadastradas neste medicamento" itens={indicacoesRelacionadas} />
+          <IndicationTags C={C} titulo="Conectado automaticamente em prescrições por doença" itens={doencasConectadas} />
+          <DetailHtmlRow label="Indicação / observação clínica" value={m.indicacao} C={C} />
           <DetailRow label="Dose" value={m.dose} C={C} />
-          <DetailRow label="Diluição" value={m.diluicao} C={C} />
-          <DetailRow label="Velocidade" value={m.velocidade} C={C} />
+          <DetailHtmlRow label="Diluição" value={m.diluicao} C={C} />
+          <DetailHtmlRow label="Velocidade" value={m.velocidade} C={C} />
           <DetailRow label="Dose máxima" value={m.doseMax} C={C} />
           <DetailRow label="Ajuste renal" value={m.ajusteRenal} C={C} />
-          <DetailRow label="Cuidados" value={m.cuidados} C={C} highlight />
-          <DetailRow label="Observações" value={m.obs} C={C} />
+          <DetailHtmlRow label="Cuidados" value={m.cuidados} C={C} highlight />
+          <DetailHtmlRow label="Observações" value={m.obs} C={C} />
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <Button C={C} variant="secondary" size="sm" icon={I.Edit} onClick={onEdit}>Editar</Button>
             <Button C={C} variant="ghost" size="sm" icon={I.Trash} onClick={onDelete}>Deletar</Button>
@@ -3187,6 +3316,36 @@ function MedCard({ m, C, onEdit, onDelete }) {
       )}
     </Card>
   );
+}
+
+function TreatmentSchemesView({ C, esquemas = [] }) {
+  const lista = Array.isArray(esquemas) ? esquemas.filter(e => (e.titulo || e.contexto || (e.antibioticos || []).length)) : [];
+  if (!lista.length) return null;
+  return <div style={{ marginBottom: 10 }}>
+    <div style={{ fontSize: 10.5, color: C.textSoft, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Opções de tratamento</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {lista.map((esq, idx) => <div key={esq.id || idx} style={{ padding: 10, borderRadius: 8, background: C.bg, border: `1px solid ${C.borderSoft}` }}>
+        <div style={{ fontSize: 13.5, fontWeight: 800, color: C.accent, marginBottom: 4 }}>{esq.titulo || `Opção ${idx + 1}`}</div>
+        {esq.contexto && <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.45, whiteSpace: 'pre-wrap', marginBottom: 8 }}>{esq.contexto}</div>}
+        {(esq.antibioticos || []).map((a, j) => <div key={a.id || j} style={{ padding: 8, borderRadius: 7, background: C.card, border: `1px solid ${C.borderSoft}`, marginTop: 6 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text }}>{a.nome || 'Antibiótico sem nome'}</div>
+          <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.6 }}>
+            {[a.dose && `Dose: ${a.dose}`, a.intervalo && `Intervalo: ${a.intervalo}`, a.diluicao && `Diluição: ${a.diluicao}`, a.infusao && `Infusão: ${a.infusao}`, a.ajusteRenal && `Ajuste renal: ${a.ajusteRenal}`].filter(Boolean).join(' • ')}
+          </div>
+          {a.observacoes && <div style={{ fontSize: 12.5, color: C.text, whiteSpace: 'pre-wrap', marginTop: 4 }}>{a.observacoes}</div>}
+        </div>)}
+      </div>)}
+    </div>
+  </div>;
+}
+
+function IndicationTags({ C, titulo, itens = [] }) {
+  const lista = (itens || []).filter(Boolean);
+  if (!lista.length) return null;
+  return <div style={{ marginBottom: 10 }}>
+    <div style={{ fontSize: 10.5, color: C.textSoft, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>{titulo}</div>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{lista.map((d, idx) => <Badge key={`${d}-${idx}`} C={C} color="soft">{d}</Badge>)}</div>
+  </div>;
 }
 
 const DetailRow = ({ label, value, C, highlight }) => {
@@ -3199,11 +3358,13 @@ const DetailRow = ({ label, value, C, highlight }) => {
         fontSize: 13.5, color: highlight ? C.error : C.text, lineHeight: 1.5,
         background: highlight ? C.error + '15' : 'transparent',
         padding: highlight ? '6px 10px' : 0, borderRadius: 6,
-        borderLeft: highlight ? `3px solid ${C.error}` : 'none'
+        borderLeft: highlight ? `3px solid ${C.error}` : 'none',
+        whiteSpace: 'pre-wrap'
       }}>{value}</div>
     </div>
   );
 };
+
 
 // ============= FLUXOGRAMAS =============
 function Fluxogramas({ fluxogramas, setFluxogramas, C }) {
