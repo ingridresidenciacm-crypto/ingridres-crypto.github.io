@@ -368,6 +368,9 @@ function App() {
       ['lumen_resumos_biblioteca', () => {}, storage.get('lumen_resumos_biblioteca', [])],
       ['lumen_calculadoras_escores', setCalculadoras, calculadoras],
       ['lumen_antimicrobianos', setAntimicrobianos, antimicrobianos],
+      ['lumen_tabela_cobertura_antimicrobiana_v2', () => {}, storage.get('lumen_tabela_cobertura_antimicrobiana_v2', null)],
+      ['lumen_tabela_agentes_etiologicos', () => {}, storage.get('lumen_tabela_agentes_etiologicos', null)],
+      ['lumen_planilhas_extras_antimicrobianos', () => {}, storage.get('lumen_planilhas_extras_antimicrobianos', [])],
       ['lumen_medicamentos', setMedicamentos, medicamentos],
       ['lumen_fluxogramas', setFluxogramas, fluxogramas],
       ['lumen_cronograma', setCronograma, cronograma],
@@ -2646,7 +2649,7 @@ function CalcScoreDetail({ item, C, onBack, onEdit }) {
 
 // ============= GUIA DE ANTIMICROBIANOS =============
 function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
-  const itemVazio = () => ({ id: 'atb-' + Date.now(), tipo: 'Agente etiológico', agente: '', classe: '', antibiotico: '', cobertura: '', resistencia: '', mecanismoAcao: '', observacoes: '', caixasTexto: [] });
+  const itemVazio = () => ({ id: 'atb-' + Date.now(), tipo: 'Agente etiológico', agente: '', classe: '', antibiotico: '', cobreResumo: '', naoCobreResumo: '', cobertura: '', resistencia: '', mecanismoAcao: '', observacoes: '', caixasTexto: [] });
   const tabelaCoberturaVazia = () => ({
     columns: ['Antimicrobiano', 'Classe', 'Cobertura principal', 'Não cobre / resistência', 'Foco ou síndrome', 'Observações'],
     rows: []
@@ -2658,6 +2661,7 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(itemVazio());
+  const [registroAberto, setRegistroAberto] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [busca, setBusca] = useState('');
   const [showTabela, setShowTabela] = useState(false);
@@ -2684,11 +2688,31 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
   useEffect(() => { storage.set('lumen_tabela_agentes_etiologicos', tabelaAgentes); }, [tabelaAgentes]);
   useEffect(() => { storage.set('lumen_planilhas_extras_antimicrobianos', planilhasExtras); }, [planilhasExtras]);
 
+  // Sincronização Firebase também para as planilhas do guia antimicrobiano.
+  // Sem estes listeners, as planilhas eram salvas na nuvem, mas outro dispositivo só carregava
+  // se o localStorage dele já tivesse sido atualizado/recarregado manualmente.
+  useEffect(() => {
+    const unsubCobertura = storage.subscribe('lumen_tabela_cobertura_antimicrobiana_v2', value => {
+      if (value && Array.isArray(value.columns) && Array.isArray(value.rows)) setTabelaCobertura(value);
+    });
+    const unsubAgentes = storage.subscribe('lumen_tabela_agentes_etiologicos', value => {
+      if (value && Array.isArray(value.columns) && Array.isArray(value.rows)) setTabelaAgentes(value);
+    });
+    const unsubExtras = storage.subscribe('lumen_planilhas_extras_antimicrobianos', value => {
+      if (Array.isArray(value)) setPlanilhasExtras(value);
+    });
+    return () => {
+      unsubCobertura && unsubCobertura();
+      unsubAgentes && unsubAgentes();
+      unsubExtras && unsubExtras();
+    };
+  }, []);
+
   const filtrados = useMemo(() => (antimicrobianos || []).filter(a => {
     if (filtroTipo !== 'todos' && a.tipo !== filtroTipo) return false;
     const q = busca.toLowerCase().trim();
     if (!q) return true;
-    return [a.agente, a.classe, a.antibiotico, a.cobertura, a.resistencia, a.mecanismoAcao, a.doseHabitual, a.observacoes, ...((a.caixasTexto || []).flatMap(sec => [sec.titulo, sec.conteudo]))].some(v => String(v || '').toLowerCase().includes(q));
+    return [a.agente, a.classe, a.antibiotico, a.cobreResumo, a.naoCobreResumo, a.cobertura, a.resistencia, a.mecanismoAcao, a.doseHabitual, a.observacoes, ...((a.caixasTexto || []).flatMap(sec => [sec.titulo, sec.conteudo]))].some(v => String(v || '').toLowerCase().includes(q));
   }), [antimicrobianos, filtroTipo, busca]);
 
   const linhasFiltradasTabela = useMemo(() => {
@@ -2718,6 +2742,23 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
     setTabela(t => ({ columns: [...(t.columns || []), nome.trim()], rows: (t.rows || []).map(r => [...(r || []), '']) }));
   };
   const renomearColuna = (idx, nome) => setTabela(t => ({ ...t, columns: (t.columns || []).map((c, i) => i === idx ? nome : c) }));
+  const moverColuna = (idx, direcao) => {
+    setTabela(t => {
+      const columns = [...(t.columns || [])];
+      const rows = (t.rows || []).map(r => [...(r || [])]);
+      const alvo = idx + direcao;
+      if (alvo < 0 || alvo >= columns.length) return t;
+
+      [columns[idx], columns[alvo]] = [columns[alvo], columns[idx]];
+      const novasRows = rows.map(row => {
+        while (row.length < columns.length) row.push('');
+        [row[idx], row[alvo]] = [row[alvo], row[idx]];
+        return row;
+      });
+
+      return { ...t, columns, rows: novasRows };
+    });
+  };
   const excluirColuna = (idx) => {
     if ((tabela.columns || []).length <= 1) return alert('A planilha precisa manter pelo menos uma coluna.');
     if (!confirm('Deseja excluir esta coluna?')) return;
@@ -2747,6 +2788,54 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
     setFiltroTabela('');
   };
 
+  const registroSelecionado = registroAberto ? (antimicrobianos || []).find(a => a.id === registroAberto) : null;
+  if (registroSelecionado) {
+    const titulo = registroSelecionado.antibiotico || registroSelecionado.agente || registroSelecionado.classe || 'Registro antimicrobiano';
+    const secoesRegistro = [
+      ['Cobertura / espectro', registroSelecionado.cobertura],
+      ['Resistências / não cobre', registroSelecionado.resistencia],
+      ['Mecanismo de ação', registroSelecionado.mecanismoAcao || registroSelecionado.doseHabitual],
+      ...((registroSelecionado.caixasTexto || []).map(sec => [sec.titulo || 'Caixa de texto', sec.conteudo || ''])),
+      ['Observações pessoais', registroSelecionado.observacoes],
+    ].filter(([, txt]) => plainText(txt || '').trim());
+
+    return <div className="lumen-fade-in">
+      <Button C={C} variant="ghost" size="sm" icon={I.ArrowL} onClick={() => setRegistroAberto(null)} style={{ marginBottom: 16 }}>Voltar ao guia</Button>
+      <div className="lumen-grid-resp" style={{ display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr)', gap: 18, alignItems: 'start' }}>
+        <Card C={C} style={{ position: 'sticky', top: 80 }}>
+          <div style={{ fontSize: 11, color: C.textSoft, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 10 }}>Tópicos</div>
+          {secoesRegistro.length === 0 ? <div style={{ fontSize: 12, color: C.textSoft }}>Sem seções cadastradas.</div> : secoesRegistro.map(([titulo]) => <a key={titulo} href={'#' + slugify(titulo)} style={{ display: 'block', padding: '9px 10px', borderRadius: 8, color: C.textMuted, textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>{titulo}</a>)}
+        </Card>
+        <Card C={C} style={{ padding: 'clamp(22px, 4vw, 38px)' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <Badge C={C}>{registroSelecionado.tipo}</Badge>
+            {registroSelecionado.classe && <Badge C={C} color="soft">{registroSelecionado.classe}</Badge>}
+            {registroSelecionado.agente && <Badge C={C} color="soft">{registroSelecionado.agente}</Badge>}
+          </div>
+          <h2 className="lumen-serif" style={{ fontSize: 'clamp(26px,4vw,38px)', margin: '0 0 18px', lineHeight: 1.15, color: C.text }}>{titulo}</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 24 }}>
+            <div style={{ padding: 14, borderRadius: 12, background: C.accentSoft, border: `1px solid ${C.accent}30` }}>
+              <div style={{ fontSize: 11, color: C.accent, fontWeight: 900, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 6 }}>COBRE</div>
+              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{registroSelecionado.cobreResumo || 'Não informado.'}</div>
+            </div>
+            <div style={{ padding: 14, borderRadius: 12, background: C.error + '12', border: `1px solid ${C.error}30` }}>
+              <div style={{ fontSize: 11, color: C.error, fontWeight: 900, letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 6 }}>NÃO COBRE</div>
+              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{registroSelecionado.naoCobreResumo || 'Não informado.'}</div>
+            </div>
+          </div>
+          {secoesRegistro.length === 0 ? <div style={{ fontSize: 14, color: C.textSoft }}>Nenhum texto detalhado cadastrado para este registro.</div> : secoesRegistro.map(([tituloSecao, txt]) => <section id={slugify(tituloSecao)} key={tituloSecao} style={{ marginBottom: 24, scrollMarginTop: 90 }}>
+            <h3 style={{ fontSize: 18, margin: '0 0 10px', padding: '10px 12px', borderRadius: 10, color: C.accent, background: C.accentSoft, display: 'inline-block' }}>{tituloSecao}</h3>
+            <HtmlText html={txt} C={C} style={{ fontSize: 15.5, lineHeight: 1.8 }} />
+          </section>)}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+            <Button C={C} variant="secondary" size="sm" icon={I.Edit} onClick={() => { setForm({ ...registroSelecionado, mecanismoAcao: registroSelecionado.mecanismoAcao || registroSelecionado.doseHabitual || '', caixasTexto: registroSelecionado.caixasTexto || [] }); setEditing(registroSelecionado.id); setShowForm(true); setRegistroAberto(null); }}>Editar</Button>
+            <Button C={C} variant="danger" size="sm" icon={I.Trash} onClick={() => { excluir(registroSelecionado.id); setRegistroAberto(null); }}>Excluir</Button>
+          </div>
+        </Card>
+      </div>
+    </div>;
+  }
+
   return <div className="lumen-fade-in">
     <Card C={C} style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
       <div><h3 className="lumen-serif" style={{ fontSize: 20, margin: '0 0 4px' }}>Guia pessoal de antimicrobianos</h3><div style={{ fontSize: 13, color: C.textMuted }}>Organize por agente etiológico, classe/antibiótico, mecanismo de ação e cobertura de microrganismos.</div></div>
@@ -2757,7 +2846,7 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
           <h3 className="lumen-serif" style={{ fontSize: 18, margin: 0 }}>{planilhaAtual.nome || 'Planilha personalizada'}</h3>
-          <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>Planilha editável com linhas e colunas livres. Use as duas planilhas principais ou crie quantas planilhas extras quiser. Os dados ficam salvos neste navegador.</div>
+          <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 3 }}>Planilha editável com linhas e colunas livres. Use as duas planilhas principais ou crie quantas planilhas extras quiser. Os dados ficam salvos no Firebase e sincronizam entre dispositivos quando as regras do Realtime Database permitem leitura/escrita.</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button C={C} size="sm" icon={I.Plus} onClick={adicionarLinha}>Adicionar linha</Button>
@@ -2769,17 +2858,19 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
         {todasPlanilhas.map(p => <button key={p.id} onClick={() => { setPlanilhaAtiva(p.id); setFiltroTabela(''); }} style={pillStyle(C, planilhaAtiva === p.id)}>{p.nome}</button>)}
       </div>
       <input value={filtroTabela} onChange={e => setFiltroTabela(e.target.value)} placeholder="Filtrar nesta planilha..." style={{ ...inputStyle(C), padding: '8px 12px', marginBottom: 12 }} />
-      <div className="lumen-scroll" style={{ overflowX: 'auto', border: `1px solid ${C.borderSoft}`, borderRadius: 10 }}>
-        <table style={{ width: '100%', minWidth: 820, borderCollapse: 'collapse', fontSize: 13 }}>
+      <div className="lumen-scroll" style={{ overflow: 'auto', maxHeight: '68vh', border: `1px solid ${C.borderSoft}`, borderRadius: 10 }}>
+        <table style={{ width: '100%', minWidth: 820, borderCollapse: 'separate', borderSpacing: 0, fontSize: 13 }}>
           <thead>
-            <tr style={{ background: C.bg }}>
-              {(tabela.columns || []).map((col, idx) => <th key={idx} style={{ padding: 8, borderBottom: `1px solid ${C.borderSoft}`, borderRight: `1px solid ${C.borderSoft}`, textAlign: 'left', minWidth: 150 }}>
+            <tr>
+              {(tabela.columns || []).map((col, idx) => <th key={idx} style={{ position: 'sticky', top: 0, zIndex: 5, padding: 8, background: C.bg, borderBottom: `2px solid ${C.borderSoft}`, borderRight: `1px solid ${C.borderSoft}`, textAlign: 'left', minWidth: 170, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button title="Mover coluna para a esquerda" disabled={idx === 0} onClick={() => moverColuna(idx, -1)} style={{ color: idx === 0 ? C.textSoft : C.textMuted, opacity: idx === 0 ? 0.35 : 1, padding: 4, display: 'flex' }}><I.ChevL size={12} /></button>
                   <input value={col} onChange={e => renomearColuna(idx, e.target.value)} style={{ ...inputStyle(C), padding: '6px 8px', fontWeight: 700 }} />
+                  <button title="Mover coluna para a direita" disabled={idx === (tabela.columns || []).length - 1} onClick={() => moverColuna(idx, 1)} style={{ color: idx === (tabela.columns || []).length - 1 ? C.textSoft : C.textMuted, opacity: idx === (tabela.columns || []).length - 1 ? 0.35 : 1, padding: 4, display: 'flex' }}><I.ChevR size={12} /></button>
                   <button title="Excluir coluna" onClick={() => excluirColuna(idx)} style={{ color: C.textSoft, padding: 4, display: 'flex' }}><I.X size={12} /></button>
                 </div>
               </th>)}
-              <th style={{ width: 48, padding: 8, borderBottom: `1px solid ${C.borderSoft}` }}></th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 5, width: 48, padding: 8, background: C.bg, borderBottom: `2px solid ${C.borderSoft}`, boxShadow: '0 2px 4px rgba(0,0,0,0.06)' }}></th>
             </tr>
           </thead>
           <tbody>
@@ -2810,13 +2901,17 @@ function GuiaAntimicrobianos({ antimicrobianos, setAntimicrobianos, C }) {
         <FormInput C={C} label="Classe" value={form.classe} onChange={v => setForm({...form, classe: v})} />
         <FormInput C={C} label="Nome do antibiótico" value={form.antibiotico} onChange={v => setForm({...form, antibiotico: v})} />
       </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 12 }}>
+        <div><FormLabel C={C}>Resumo da capa · COBRE</FormLabel><textarea value={form.cobreResumo || ''} onChange={e => setForm({...form, cobreResumo: e.target.value})} placeholder="Resumo curto para aparecer na capa. Ex.: MSSA, Streptococcus, anaeróbios..." style={{ ...inputStyle(C), minHeight: 72 }} /></div>
+        <div><FormLabel C={C}>Resumo da capa · NÃO COBRE</FormLabel><textarea value={form.naoCobreResumo || ''} onChange={e => setForm({...form, naoCobreResumo: e.target.value})} placeholder="Resumo curto para aparecer na capa. Ex.: MRSA, Pseudomonas, ESBL/KPC..." style={{ ...inputStyle(C), minHeight: 72 }} /></div>
+      </div>
       <FormLabel C={C} style={{ marginTop: 12 }}>Cobertura / espectro</FormLabel><RichTextEditor C={C} value={form.cobertura} onChange={v => setForm({...form, cobertura: v})} minHeight={90} placeholder="Ex.: Gram positivos, Gram negativos, anaeróbios, Pseudomonas, MRSA..." />
       <FormLabel C={C} style={{ marginTop: 12 }}>Resistências / não cobre</FormLabel><RichTextEditor C={C} value={form.resistencia} onChange={v => setForm({...form, resistencia: v})} minHeight={80} placeholder="Ex.: não cobre MRSA, ESBL, KPC; resistência intrínseca..." />
       <FormLabel C={C} style={{ marginTop: 12 }}>Mecanismo de ação</FormLabel><RichTextEditor C={C} value={form.mecanismoAcao || form.doseHabitual || ''} onChange={v => setForm({...form, mecanismoAcao: v})} minHeight={80} placeholder="Ex.: inibe síntese de parede celular; liga-se à subunidade 50S; inibe DNA girase/topoisomerase..." />
       <CustomSectionsEditor C={C} sections={form.caixasTexto || []} onChange={secs => setForm({...form, caixasTexto: secs})} label="Caixas de texto do registro" /><FormLabel C={C} style={{ marginTop: 12 }}>Observações pessoais</FormLabel><RichTextEditor C={C} value={form.observacoes} onChange={v => setForm({...form, observacoes: v})} minHeight={70} />
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><Button C={C} icon={I.Save} onClick={salvar}>Salvar</Button><Button C={C} variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Cancelar</Button></div>
     </Card>}
-    {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Activity size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum registro cadastrado. Clique em “Novo registro”.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>{filtrados.map(a => <Card key={a.id} C={C} hover><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}><Badge C={C}>{a.tipo}</Badge>{a.classe && <Badge C={C} color="soft">{a.classe}</Badge>}</div><h4 className="lumen-serif" style={{ fontSize: 18, margin: '4px 0 8px', fontWeight: 500, color: C.text }}>{a.antibiotico || a.agente || a.classe}</h4>{a.agente && <div style={{ fontSize: 12.5, color: C.textSoft, marginBottom: 6 }}><strong>Agente:</strong> {a.agente}</div>}{a.cobertura && <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}><strong>Cobertura:</strong><br />{a.cobertura}</div>}{a.resistencia && <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: C.error + '12', color: C.error, fontSize: 12.5, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}><strong>Não cobre / atenção:</strong><br />{a.resistencia}</div>}{(a.mecanismoAcao || a.doseHabitual) && <div style={{ marginTop: 8, fontSize: 12.5, color: C.textMuted, whiteSpace: 'pre-wrap' }}><strong>Mecanismo de ação:</strong> {a.mecanismoAcao || a.doseHabitual}</div>}{(a.caixasTexto || []).filter(sec => plainText(sec.conteudo || '').trim() || (sec.titulo || '').trim()).map((sec, idx) => <div key={sec.id || idx} style={{ marginTop: 8, padding: 10, borderRadius: 8, background: C.bg, border: `1px solid ${C.borderSoft}` }}><div style={{ fontSize: 11, color: C.accent, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>{sec.titulo || 'Caixa de texto'}</div><HtmlText html={sec.conteudo || ''} C={C} style={{ fontSize: 12.5, lineHeight: 1.55 }} /></div>)}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}><button onClick={() => { setForm({ ...a, mecanismoAcao: a.mecanismoAcao || a.doseHabitual || '', caixasTexto: a.caixasTexto || [] }); setEditing(a.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar"><I.Edit size={13} /></button><button onClick={() => excluir(a.id)} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir"><I.Trash size={13} /></button></div></Card>)}</div>}
+    {filtrados.length === 0 && !showForm ? <Card C={C} style={{ textAlign: 'center', padding: 60 }}><I.Activity size={34} /><div style={{ fontSize: 15, color: C.textMuted, marginTop: 12 }}>Nenhum registro cadastrado. Clique em “Novo registro”.</div></Card> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>{filtrados.map(a => <Card key={a.id} C={C} hover onClick={() => setRegistroAberto(a.id)}><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}><Badge C={C}>{a.tipo}</Badge>{a.classe && <Badge C={C} color="soft">{a.classe}</Badge>}</div><h4 className="lumen-serif" style={{ fontSize: 18, margin: '4px 0 8px', fontWeight: 500, color: C.text }}>{a.antibiotico || a.agente || a.classe}</h4>{a.agente && <div style={{ fontSize: 12.5, color: C.textSoft, marginBottom: 8 }}><strong>Agente:</strong> {a.agente}</div>}<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}><div style={{ padding: 10, borderRadius: 8, background: C.accentSoft, border: `1px solid ${C.accent}25` }}><div style={{ fontSize: 10.5, color: C.accent, fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>COBRE</div><div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.45, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.cobreResumo || plainText(a.cobertura || '') || '—'}</div></div><div style={{ padding: 10, borderRadius: 8, background: C.error + '12', border: `1px solid ${C.error}25` }}><div style={{ fontSize: 10.5, color: C.error, fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>NÃO COBRE</div><div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.45, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{a.naoCobreResumo || plainText(a.resistencia || '') || '—'}</div></div></div>{(a.caixasTexto || []).filter(sec => plainText(sec.conteudo || '').trim() || (sec.titulo || '').trim()).slice(0, 3).map((sec, idx) => <div key={sec.id || idx} style={{ marginTop: 8, padding: 10, borderRadius: 8, background: C.bg, border: `1px solid ${C.borderSoft}` }}><div style={{ fontSize: 11, color: C.accent, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{sec.titulo || 'Caixa de texto'}</div></div>)}<div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'space-between', alignItems: 'center' }}><span style={{ fontSize: 12, color: C.accent, fontWeight: 800 }}>Abrir texto completo →</span><span style={{ display: 'flex', gap: 8 }} onClick={e => e.stopPropagation()}><button onClick={() => { setForm({ ...a, mecanismoAcao: a.mecanismoAcao || a.doseHabitual || '', caixasTexto: a.caixasTexto || [] }); setEditing(a.id); setShowForm(true); }} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Editar"><I.Edit size={13} /></button><button onClick={() => excluir(a.id)} style={{ padding: 4, color: C.textSoft, display: 'flex' }} title="Excluir"><I.Trash size={13} /></button></span></div></Card>)}</div>}
   </div>;
 }
 
